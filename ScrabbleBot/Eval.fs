@@ -4,8 +4,19 @@ module internal Eval
 
     open StateMonad
 
-    let add a b = failwith "Not implemented"      
-    let div a b = failwith "Not implemented"      
+    let binop op a b = a >>= fun x -> b >>= fun y -> ret(op x y)
+    
+    let add a b = binop (+) a b
+    
+    let sub a b = binop (-) a b
+    
+    let div a b =
+        a >>= (fun a' ->
+        b >>= (fun b' ->
+           if b' <> 0 then
+               ret (a' / b')
+           else
+               fail DivisionByZero ))     
 
     type aExp =
         | N of int
