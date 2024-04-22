@@ -91,7 +91,9 @@ module Scrabble =
             | RCM (CMPlaySuccess(ms, points, newPieces)) ->
                 forcePrint "RCMPlaySuccess**"
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
-                let st' = st
+                let withaddedpieces = List.fold (fun acc (key, amount) -> MultiSet.add key amount acc) st.hand newPieces
+                let removepieces = List.fold (fun acc ((_,_),(key, (_ , _))) -> MultiSet.remove key 1u acc) withaddedpieces move
+                let st' = State.mkState st.board st.dict st.playerNumber removepieces
                 aux st'
             | RCM (CMPlayed (pid, ms, points)) ->
                 forcePrint "RCMPlayed**"
