@@ -28,6 +28,14 @@ module RegEx =
                     ((x |> int, y |> int), (id |> uint32, (c |> char, p |> int)))
                 | _ -> failwith "Failed (should never happen)") |>
         Seq.toList
+        
+    // Function to print a single MoveCommand
+    let printMoveCommand (moves : ((int * int) * (uint32 * (char * int))) list) =
+        moves |> List.iteri (fun index ((x, y), (pieceId, (character, pointValue))) ->
+        printfn "Move %d: (%d, %d) -> (%u, ('%c', %d))" (index + 1) x y pieceId character pointValue
+    )
+
+
 
  module Print =
 
@@ -62,11 +70,16 @@ module Scrabble =
 
         let rec aux (st : State.state) =
             Print.printHand pieces (State.hand st)
-
+            
             // remove the force print when you move on from manual input (or when you have learnt the format)
+            // 0 0 5E1 0 1 1A1 0 2 20T1  -> EAT
+            // 0 0 19S1 0 1 5E1 0 2 1A1  -> SEA
+            // 0 0 6F4 0 1 9I1 0 2 14N1  -> FIN (bemærk [('F',4)] angiver point value)
+                    // 1 2 15O1 2 2 20T1 -> OT efter N ovenfor (dvs NOT vandret)
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
             let input =  System.Console.ReadLine()
             let move = RegEx.parseMove input
+            RegEx.printMoveCommand move
 
             debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
             send cstream (SMPlay move)
@@ -76,18 +89,21 @@ module Scrabble =
 
             match msg with
             | RCM (CMPlaySuccess(ms, points, newPieces)) ->
+                forcePrint "RCMPlaySuccess**"
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
-                let st' = st // This state needs to be updated
+                let st' = st
                 aux st'
             | RCM (CMPlayed (pid, ms, points)) ->
+                forcePrint "RCMPlayed**"
                 (* Successful play by other player. Update your state *)
-                let st' = st // This state needs to be updated
+                let st' = st // This state needs to be update
                 aux st'
             | RCM (CMPlayFailed (pid, ms)) ->
+                forcePrint "RCMPlaySuccess**"
                 (* Failed play. Update your state *)
                 let st' = st // This state needs to be updated
                 aux st'
-            | RCM (CMGameOver _) -> ()
+            | RCM (CMGameOver _) -> (forcePrint "CMGameOver**")
             | RCM a -> failwith (sprintf "not implmented: %A" a)
             | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st
 
