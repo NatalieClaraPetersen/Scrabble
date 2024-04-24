@@ -42,6 +42,10 @@ module RegEx =
     let printHand pieces hand =
         hand |>
         MultiSet.fold (fun _ x i -> forcePrint (sprintf "%d -> (%A, %d)\n" x (Map.find x pieces) i)) ()
+        
+    let getHand pieces hand =
+        hand |>
+        MultiSet.fold (fun acc x i -> x :: acc) []
 
 module State = 
     // Make sure to keep your state localised in this module. It makes your life a whole lot easier.
@@ -78,12 +82,26 @@ module Scrabble =
                     // 1 2 15O1 2 2 20T1 -> OT efter N ovenfor (dvs NOT vandret)
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
             let input =  System.Console.ReadLine()
+            if input = "change" then
+                send cstream (SMChange (Print.getHand pieces (State.hand st)))
+                let msg = recv cstream
+                match msg with
+                | RCM (CMChangeSuccess(newTiles)) ->
+                    (forcePrint "RCMChangeSuccess**")
+                    let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty newTiles
+                    let st' = State.mkState st.board st.dict st.playerNumber handSet
+                    aux st'
+                | RCM a -> failwith (sprintf "not implmented: %A" a)
+                | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st
+            
+             
             let move = RegEx.parseMove input
             RegEx.printMoveCommand move
 
             debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
             send cstream (SMPlay move)
-
+            
+            
             let msg = recv cstream
             debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
 
