@@ -78,6 +78,17 @@ module Scrabble =
                     // 1 2 15O1 2 2 20T1 -> OT efter N ovenfor (dvs NOT vandret)
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
             let input =  System.Console.ReadLine()
+            if input = "change" then
+                send cstream (SMChange ((State.hand st) |> MultiSet.fold (fun acc x _ -> x :: acc) []))
+                let msg = recv cstream
+                match msg with
+                | RCM (CMChangeSuccess(newTiles)) ->
+                    (forcePrint "RCMChangeSuccess**")
+                    let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty newTiles
+                    let st' = State.mkState st.board st.dict st.playerNumber handSet
+                    aux st'
+                | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st
+             
             let move = RegEx.parseMove input
             RegEx.printMoveCommand move
 
