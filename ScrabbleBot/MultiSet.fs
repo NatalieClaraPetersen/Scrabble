@@ -12,37 +12,33 @@ module internal MultiSet
 
     let empty = R Map.empty
 
-    let isEmpty (R set: MultiSet<'a>) = set.IsEmpty
+    let isEmpty (R ms: MultiSet<'a>) = ms.IsEmpty
     
-    let size (R set : MultiSet<'a>) = Map.fold(fun acc key value -> acc + value) 0u set
+    let size (R ms : MultiSet<'a>) = Map.fold (fun acc _ value -> acc + value) 0u ms
     
-    let contains (elem : 'a) (R set : MultiSet<'a>) = set.ContainsKey(elem)
+    let contains (elem : 'a) (R ms : MultiSet<'a>) = ms.ContainsKey(elem)
 
-    let numItems (elem : 'a) (R set : MultiSet<'a>) =
-        match Map.tryFind elem set with
+    let numItems (elem : 'a) (R ms : MultiSet<'a>) =
+        match Map.tryFind elem ms with
         | Some count -> count
         | None -> 0u
 
-    let add (elem: 'a) (num : uint32) (R set : MultiSet<'a>) : MultiSet<'a> =
-        match Map.tryFind elem set with
-        | Some currentVal -> R (Map.add elem (currentVal + num) set)
-        | None -> R (Map.add elem (num) set)
+    let add (elem: 'a) (amount : uint32) (R ms : MultiSet<'a>) =
+        let currentVal = numItems elem (R ms)
+        R (Map.add elem (currentVal + amount) ms)
+        
+    let addSingle (elem: 'a) (ms : MultiSet<'a>) = add elem 1u ms
+        
+    let remove (elem: 'a) (amount: uint32) (R ms: MultiSet<'a>) =
+        match numItems elem (R ms) with
+        | 0u -> R ms
+        | x when amount >= x -> R (Map.remove elem ms)
+        | x -> R (Map.add elem (x - amount) ms)
 
-    let addSingle (elem: 'a) (R set: MultiSet<'a>) : MultiSet<'a> =
-        match Map.tryFind elem set with
-        | Some currentVal -> R (Map.add elem (currentVal + 1u) set)
-        | None -> R (Map.add elem 1u set)
-    
-    let remove (elem: 'a) (num: uint32) (R set: MultiSet<'a>) : MultiSet<'a> =
-        match Map.tryFind elem set with
-        | Some currentVal when currentVal > num -> R (Map.add elem (currentVal - num) set)
-        | Some _ -> R (Map.remove elem set)
-        | None -> R(set)
+    let removeSingle (elem: 'a) (ms: MultiSet<'a>) = remove elem 1u ms
 
-    let removeSingle (elem: 'a) (set: MultiSet<'a>) : MultiSet<'a> = remove elem 1u set
-
-    let fold (f: 'b -> 'a -> uint32 -> 'b) (acc: 'b) (R set: MultiSet<'a>) = Map.fold f acc set
-    let foldBack (f: 'a -> uint32 -> 'b -> 'b) (R set: MultiSet<'a>) (acc: 'b) = Map.foldBack f set acc
+    let fold (folder: 'b -> 'a -> uint32 -> 'b) (acc: 'b) (R ms: MultiSet<'a>) = Map.fold folder acc ms
+    let foldBack (folder: 'a -> uint32 -> 'b -> 'b) (R ms: MultiSet<'a>) (acc: 'b) = Map.foldBack folder ms acc
     
     let ofList (_ : 'a list) : MultiSet<'a> = failwith "not implemented"
     let toList (_ : MultiSet<'a>) : 'a list = []
