@@ -8,25 +8,51 @@ module internal MultiSet
     //let add   : 'a -> uint32 -> MultiSet<'a> -> MultiSet<'a> = fun _ _ _ -> failwith "Not implemented"
     //let fold  : ('b -> 'a -> uint32 -> 'b) -> 'b -> MultiSet<'a> -> 'b = fun _ _ _ -> failwith "Not implemented"
 
-    type MultiSet<'a when 'a : comparison> = { items: Map<'a, uint32> }
+    type MultiSet<'a when 'a : comparison> = R of Map<'a, uint32>
+
+    let empty = R Map.empty
+
+    let isEmpty (R set: MultiSet<'a>) = set.IsEmpty
     
-    let empty : MultiSet<'a> = { items = Map.empty }
+    let size (R set : MultiSet<'a>) = Map.fold(fun acc key value -> acc + value) 0u set
     
-    let fold (f : 'b -> 'a -> uint32 -> 'b) (acc : 'b) (m : MultiSet<'a>) = 
-        Map.fold (fun acc key value -> f acc key value) acc m.items
-        
-    let numItems (key : 'a) (m : MultiSet<'a>) = 
-        match Map.tryFind key m.items with
-        | Some v -> v
+    let contains (elem : 'a) (R set : MultiSet<'a>) = set.ContainsKey(elem)
+
+    let numItems (elem : 'a) (R set : MultiSet<'a>) =
+        match Map.tryFind elem set with
+        | Some count -> count
         | None -> 0u
 
-    let add (key : 'a) (amount : uint32) (m : MultiSet<'a>) : MultiSet<'a> =
-        let count = numItems key m
-        { items = Map.add key (count + amount) m.items }
+    let add (elem: 'a) (num : uint32) (R set : MultiSet<'a>) : MultiSet<'a> =
+        match Map.tryFind elem set with
+        | Some currentVal -> R (Map.add elem (currentVal + num) set)
+        | None -> R (Map.add elem (num) set)
+
+    let addSingle (elem: 'a) (R set: MultiSet<'a>) : MultiSet<'a> =
+        match Map.tryFind elem set with
+        | Some currentVal -> R (Map.add elem (currentVal + 1u) set)
+        | None -> R (Map.add elem 1u set)
     
-    let remove (key : 'a) (amount : uint32) (m  : MultiSet<'a>) : MultiSet<'a> = 
-        let count = numItems key m
-        if count <= amount then  
-            { items = Map.remove key m.items }
-        else 
-            { items = Map.add key (count - amount) m.items }
+    let remove (elem: 'a) (num: uint32) (R set: MultiSet<'a>) : MultiSet<'a> =
+        match Map.tryFind elem set with
+        | Some currentVal when currentVal > num -> R (Map.add elem (currentVal - num) set)
+        | Some _ -> R (Map.remove elem set)
+        | None -> R(set)
+
+    let removeSingle (elem: 'a) (set: MultiSet<'a>) : MultiSet<'a> = remove elem 1u set
+
+    let fold (f: 'b -> 'a -> uint32 -> 'b) (acc: 'b) (R set: MultiSet<'a>) = Map.fold f acc set
+    let foldBack (f: 'a -> uint32 -> 'b -> 'b) (R set: MultiSet<'a>) (acc: 'b) = Map.foldBack f set acc
+    
+    let ofList (_ : 'a list) : MultiSet<'a> = failwith "not implemented"
+    let toList (_ : MultiSet<'a>) : 'a list = []
+
+
+    let map (_ : 'a -> 'b) (_ : MultiSet<'a>) : MultiSet<'b> = failwith "not implemented"
+
+    let union (_ : MultiSet<'a>) (_ : MultiSet<'a>) : MultiSet<'a> = failwith "not implemented"
+    let sum (_ : MultiSet<'a>) (_ : MultiSet<'a>) : MultiSet<'a> = failwith "not implemented"
+    
+    let subtract (_ : MultiSet<'a>) (_ : MultiSet<'a>) : MultiSet<'a> = failwith "not implemented"
+    
+    let intersection (_ : MultiSet<'a>) (_ : MultiSet<'a>) : MultiSet<'a> = failwith "not implemented"
