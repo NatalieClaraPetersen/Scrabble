@@ -1,7 +1,4 @@
 module TreeDict
-
-    open ScrabbleUtil
-    open ScrabbleUtil.Dictionary
     
     type TreeDict =
         | Leaf of bool
