@@ -6,8 +6,8 @@ module TreeDict
 
     let empty () = Leaf false
 
-    let rec lookup (word: string) =
-        function
+    let rec lookup (word: string) (dict: TreeDict) =
+        match dict with
         // we reach a leaf and the word is empty
         | Leaf _ when word.Length = 0 -> true
         // we reach a leaf and the word is not empty
@@ -22,8 +22,8 @@ module TreeDict
             // word is not empty but there is no more chars to lookup
             | None -> false
     
-    let rec insert (word: string) = 
-        function
+    let rec insert (word: string) (dict: TreeDict) = 
+        match dict with
         | Leaf _ when word.Length = 0 -> Leaf true
         | Dict (_, children) when word.Length = 0 -> Dict (true, children)
         | Leaf isTerminal ->
@@ -40,8 +40,8 @@ module TreeDict
                 let newMap = Map.add char (insert (word.Substring(1)) (empty())) children
                 Dict(isTerminal, newMap)
 
-    let step (char: char) =
-        function
+    let step (char: char) (dict: TreeDict) =
+        match dict with
         | Leaf _ -> None
         | Dict (_, children) ->
             match Map.tryFind char children with
