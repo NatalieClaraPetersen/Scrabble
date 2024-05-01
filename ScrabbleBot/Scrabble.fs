@@ -99,16 +99,22 @@ module Scrabble =
             
             debugPrint (sprintf "Possible suffixes: %A\n" possibleSuffixes)
             if Set.isEmpty possibleSuffixes then
-                send cstream (SMChange (State.getHandIds st))
-                let msg = recv cstream
-                match msg with
-                | RCM (CMChangeSuccess(newTiles)) ->
-                    (forcePrint "RCMChangeSuccess**\n")
-                    let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty newTiles
-                    let st' = State.mkState st.board st.dict st.playerNumber handSet st.lastLetter st.direction
-                    aux st'
-                | RCM (CMGameOver _) -> (forcePrint "CMGameOver: **Three CMChangeSuccess in a row**\n"); aux st
-                | RGPE err -> printfn "Gameplay Error:\n%A" err; 
+                let rec changeHand handIdList =
+                    send cstream (SMChange handIdList)
+                    let msg = recv cstream
+                    match msg with
+                    | RCM (CMChangeSuccess(newTiles)) ->
+                        (forcePrint "RCMChangeSuccess**\n")
+                        let leftoverHand = List.fold (fun acc id -> MultiSet.remove id 1u acc) st.hand handIdList
+                        let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) leftoverHand newTiles
+                        let st' = State.mkState st.board st.dict st.playerNumber handSet st.lastLetter st.direction
+                        aux st'
+                    | RCM (CMGameOver _) -> (forcePrint "CMGameOver: **Three CMChangeSuccess in a row**\n"); aux st
+                    | RGPE err ->
+                        //printfn "Gameplay Error**%A\n" err
+                        (forcePrint "Gameplay Error: **Not enough pieces**\n")
+                        changeHand handIdList.Tail
+                changeHand (State.getHandIds st)
             
             let suffix = possibleSuffixes |> Set.toList |> List.maxBy List.length            
             let moveStartPos = st.lastLetter |> fst
