@@ -55,9 +55,11 @@ module State =
         dict          : ScrabbleUtil.Dictionary.Dict
         playerNumber  : uint32
         hand          : MultiSet.MultiSet<uint32>
+        lastLetter    : (int * int) * (uint32 * (char * int))
+        direction     : bool // true = horizontal, false = vertical
     }
 
-    let mkState b d pn h = {board = b; dict = d;  playerNumber = pn; hand = h }
+    let mkState b d pn h ll dir = {board = b; dict = d;  playerNumber = pn; hand = h; lastLetter = ll; direction = dir}
 
     let board st         = st.board
     let dict st          = st.dict
@@ -70,6 +72,12 @@ module State =
         let offset = uint32 'A' - 1u
         let idToChar (id: uint32) : char = char (id + offset)
         List.map idToChar ids
+    
+    let charToLetter (char : char) (pieces : Map<uint, tile>): (uint32 * (char * int)) =
+        let offset = uint32 'A' - 1u
+        let charToId (c : char) : uint32 = uint32 c - offset
+        let charToValue (id : uint32) = (Map.find id pieces) |> Set.minElement |> snd
+        charToId char, (char, charToValue (charToId char))
 
 
 module Scrabble =
@@ -85,29 +93,38 @@ module Scrabble =
             // 0 0 6F4 0 1 9I1 0 2 14N1  -> FIN (bemærk [('F',4)] angiver point value)
                     // 1 2 15O1 2 2 20T1 -> OT efter N ovenfor (dvs NOT vandret)
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
-            let input =  System.Console.ReadLine()
+            // let input =  System.Console.ReadLine()
+            //
+            // if input = "help" then
+            //     let pref ()=
+            //         let input =  System.Console.ReadLine()
+            //         let handAsCharList = State.getHandChars st
+            //         handAsCharList |> List.iter (printf "%c ")
+            //         printfn ""
+            //         let ans = MakeWord.findPossibleSuffixes (State.dict st) handAsCharList input
+            //         ans |> printfn "ANS: %A"
+            //     pref ()
+            // else if input = "change" then
+            //     send cstream (SMChange ((State.hand st) |> MultiSet.fold (fun acc x _ -> x :: acc) []))
+            //     let msg = recv cstream
+            //     match msg with
+            //     | RCM (CMChangeSuccess(newTiles)) ->
+            //         (forcePrint "RCMChangeSuccess**")
+            //         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty newTiles
+            //         let st' = State.mkState st.board st.dict st.playerNumber handSet st.lastLetter st.direction
+            //         aux st'
+            //     | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st
+            //
+            let prefix = st.lastLetter |> snd |> (fun (id, (char, value)) -> string char)
+            let handAsCharList = State.getHandChars st
+            let suffix = MakeWord.findPossibleSuffixes (State.dict st) handAsCharList prefix |> Seq.head
             
-            if input = "help" then
-                let pref ()=
-                    let input =  System.Console.ReadLine()
-                    let handAsCharList = State.getHandChars st
-                    handAsCharList |> List.iter (printf "%c ")
-                    printfn ""
-                    let ans = MakeWord.findPossibleSuffixes (State.dict st) handAsCharList input
-                    ans |> Set.iter (printfn "ANS: %s")
-                pref ()
-            else if input = "change" then
-                send cstream (SMChange ((State.hand st) |> MultiSet.fold (fun acc x _ -> x :: acc) []))
-                let msg = recv cstream
-                match msg with
-                | RCM (CMChangeSuccess(newTiles)) ->
-                    (forcePrint "RCMChangeSuccess**")
-                    let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty newTiles
-                    let st' = State.mkState st.board st.dict st.playerNumber handSet
-                    aux st'
-                | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st
-             
-            let move = RegEx.parseMove input
+            let moveStartPos = st.lastLetter |> fst
+            let addPos (x, y) index = if st.direction then (x + index, y) else (x, y + index)
+            let move = List.fold (fun acc char -> acc@[(addPos moveStartPos (acc.Length + 1)),(State.charToLetter char pieces)]) [] suffix
+            
+            
+            // let move = RegEx.parseMove input
             RegEx.printMoveCommand move
 
             debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
@@ -122,7 +139,8 @@ module Scrabble =
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
                 let leftoverHand = List.fold (fun acc (_,(id, _)) -> MultiSet.remove id 1u acc) st.hand move
                 let newHand = List.fold (fun acc (id, amount) -> MultiSet.add id amount acc) leftoverHand newPieces
-                let st' = State.mkState st.board st.dict st.playerNumber newHand
+                let lastLetterPlaced = List.last move
+                let st' = State.mkState st.board st.dict st.playerNumber newHand lastLetterPlaced (not st.direction)
                 aux st'
             | RCM (CMPlayed (pid, ms, points)) ->
                 forcePrint "RCMPlayed**"
@@ -164,6 +182,7 @@ module Scrabble =
         let board = Parser.mkBoard boardP
                   
         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty hand
+        let startingLetter = ((-1, 0), (0u, (' ', 0))) // Only the position is important, the rest is irrelevant
 
-        fun () -> playGame cstream tiles (State.mkState board dict playerNumber handSet)
+        fun () -> playGame cstream tiles (State.mkState board dict playerNumber handSet startingLetter true)
         

@@ -15,20 +15,20 @@ module internal MakeWord
                 | None -> trieRoot  // Prefix not found in trie
         loop trieRoot (List.ofSeq prefix)
         
-    let rec findPossibleSuffixes (dict: Dict) (pieces: char list) (prefix :string) : string Set =
-        let rec loop currentNode currentPieces char currentSuffix (acc : string Set) =
+    let rec findPossibleSuffixes (dict: Dict) (hand: char list) (prefix :string) : (char List) Set =
+        let rec loop currentNode currentPieces char currentSuffix (acc : (char List) Set) =
             match step char currentNode with
-            | Some (true, _) -> Set.add currentSuffix acc  // Current path forms a valid terminal word (suffix)
             | None -> acc               // Dead end
+            | Some (true, _) -> Set.add currentSuffix acc  // Current path forms a valid terminal word (suffix)
             | Some (false, children) -> // Current path does not form a valid word or is not a terminal node
                 List.fold
                   (fun state char ->
                     let unusedPieces = List.filter (fun c -> c <> char) currentPieces
-                    loop children unusedPieces char (currentSuffix + string char) state
+                    loop children unusedPieces char (currentSuffix @ [char]) state
                   ) acc currentPieces
         // Initialize the loop with an empty suffix and start on node after prefix
         List.fold
             (fun acc char ->
-                let unusedPieces = List.filter (fun c -> c <> char) pieces
-                loop (getNodeAfterPrefix dict prefix) unusedPieces char (string char) acc
-            ) Set.empty pieces
+                let unusedPieces = List.filter (fun c -> c <> char) hand
+                loop (getNodeAfterPrefix dict prefix) unusedPieces char [char] acc
+            ) Set.empty hand
