@@ -91,7 +91,7 @@ module Scrabble =
             // 0 0 19S1 0 1 5E1 0 2 1A1  -> SEA
             // 0 0 6F4 0 1 9I1 0 2 14N1  -> FIN (bemærk [('F',4)] angiver point value)
                     // 1 2 15O1 2 2 20T1 -> OT efter N ovenfor (dvs NOT vandret)
-            forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
+            //forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
 
             let prefix = st.lastLetter |> snd |> (fun (id, (char, value)) -> string char)
             let handAsCharList = State.getHandChars st
@@ -99,7 +99,7 @@ module Scrabble =
             
             debugPrint (sprintf "Possible suffixes: %A" possibleSuffixes)
             if Set.isEmpty possibleSuffixes then
-                send cstream (SMChange ((State.hand st) |> MultiSet.fold (fun acc x _ -> x :: acc) []))
+                send cstream (SMChange ((State.hand st) |> MultiSet.fold (fun acc x i -> (List.replicate (int i) x) @ acc) []))
                 let msg = recv cstream
                 match msg with
                 | RCM (CMChangeSuccess(newTiles)) ->
@@ -107,9 +107,11 @@ module Scrabble =
                     let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty newTiles
                     let st' = State.mkState st.board st.dict st.playerNumber handSet st.lastLetter st.direction
                     aux st'
-                | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st
+                | RCM (CMGameOver _) -> (forcePrint "CMGameOver**"); aux st
+                | RCM a -> failwith (sprintf "not implmented: %A" a); 
+                | RGPE err -> printfn "Gameplay Error:\n%A" err;
             
-            let suffix = Seq.head possibleSuffixes            
+            let suffix = possibleSuffixes |> Set.toList |> List.maxBy List.length            
             let moveStartPos = st.lastLetter |> fst
             let addPos (x, y) index = if st.direction then (x + index, y) else (x, y + index)
             let move = List.fold (fun acc char -> acc@[(addPos moveStartPos (acc.Length + 1)),(State.charToLetter char pieces)]) [] suffix
