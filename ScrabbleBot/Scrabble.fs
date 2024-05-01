@@ -1,5 +1,6 @@
 ﻿namespace Hoved
 
+open System
 open ScrabbleUtil
 open ScrabbleUtil.ServerCommunication
 
@@ -62,6 +63,14 @@ module State =
     let dict st          = st.dict
     let playerNumber st  = st.playerNumber
     let hand st          = st.hand
+    
+    let getHandIds st = (hand st) |> MultiSet.fold (fun acc x i -> (List.replicate (int i) x) @ acc) []
+    let getHandChars st : char List =
+        let ids = st |> getHandIds
+        let offset = uint32 'A' - 1u
+        let idToChar (id: uint32) : char = char (id + offset)
+        List.map idToChar ids
+
 
 module Scrabble =
     open System.Threading
@@ -70,7 +79,6 @@ module Scrabble =
 
         let rec aux (st : State.state) =
             Print.printHand pieces (State.hand st)
-            
             // remove the force print when you move on from manual input (or when you have learnt the format)
             // 0 0 5E1 0 1 1A1 0 2 20T1  -> EAT
             // 0 0 19S1 0 1 5E1 0 2 1A1  -> SEA
@@ -78,7 +86,17 @@ module Scrabble =
                     // 1 2 15O1 2 2 20T1 -> OT efter N ovenfor (dvs NOT vandret)
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
             let input =  System.Console.ReadLine()
-            if input = "change" then
+            
+            if input = "help" then
+                let pref ()=
+                    let input =  System.Console.ReadLine()
+                    let handAsCharList = State.getHandChars st
+                    handAsCharList |> List.iter (printf "%c ")
+                    printfn ""
+                    let ans = MakeWord.findPossibleSuffixes (State.dict st) handAsCharList input
+                    ans |> Set.iter (printfn "ANS: %s")
+                pref ()
+            else if input = "change" then
                 send cstream (SMChange ((State.hand st) |> MultiSet.fold (fun acc x _ -> x :: acc) []))
                 let msg = recv cstream
                 match msg with
