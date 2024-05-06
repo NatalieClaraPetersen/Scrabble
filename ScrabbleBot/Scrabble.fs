@@ -32,7 +32,7 @@ module RegEx =
     // Function to print a single MoveCommand
     let printMoveCommand (moves : ((int * int) * (uint32 * (char * int))) list) =
         moves |> List.iteri (fun index ((x, y), (pieceId, (character, pointValue))) ->
-        printfn "Move %d: (%d, %d) -> (%u, ('%c', %d))" (index + 1) x y pieceId character pointValue
+        debugPrint $"Move %d{index + 1}: (%d{x}, %d{y}) -> (%u{pieceId}, ('%c{character}', %d{pointValue}))"
     )
 
 
@@ -41,7 +41,7 @@ module RegEx =
 
     let printHand pieces hand =
         hand |>
-        MultiSet.fold (fun _ x i -> forcePrint (sprintf "%d -> (%A, %d)\n" x (Map.find x pieces) i)) ()
+        MultiSet.fold (fun _ x i -> debugPrint (sprintf "%d -> (%A, %d)\n" x (Map.find x pieces) i)) ()
 
 module State = 
     // Make sure to keep your state localised in this module. It makes your life a whole lot easier.
@@ -50,7 +50,7 @@ module State =
     // information, such as number of players, player turn, etc.
 
     type state = {
-        board         : ScrabbleLib.simpleBoardFun
+        board         : simpleBoardFun
         dict          : Dictionary.Dict
         playerNumber  : uint32
         hand          : MultiSet.MultiSet<uint32>
@@ -89,7 +89,7 @@ module Scrabble =
         let rec aux (st : State.state) =
             Print.printHand pieces (State.hand st)
 
-            let prefix = st.lastLetter |> snd |> (fun (id, (char, value)) -> string char)
+            let prefix = st.lastLetter |> snd |> (fun (_id, (char, _value)) -> string char)
             let handMultiset = MultiSet.fold (fun acc id amount -> MultiSet.add (id, State.idToChar id) amount acc) MultiSet.empty (State.hand st)
             let possibleSuffixes = MakeWord.findPossibleSuffixes (State.dict st) handMultiset prefix
             
@@ -106,7 +106,7 @@ module Scrabble =
                         let st' = State.mkState st.board st.dict st.playerNumber handSet st.lastLetter st.direction
                         aux st'
                     | RCM (CMGameOver _) -> (debugPrint "CMGameOver: **Three CMChangeSuccess in a row**\n");
-                    | RGPE err ->
+                    | RGPE _err ->
                         //printfn "Gameplay Error**%A\n" err
                         (debugPrint "Gameplay Error: **Not enough pieces**\n")
                         changeHand handIdList.Tail
@@ -126,7 +126,7 @@ module Scrabble =
             debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
 
             match msg with
-            | RCM (CMPlaySuccess(ms, points, newPieces)) ->
+            | RCM (CMPlaySuccess(_ms, _points, newPieces)) ->
                 debugPrint "RCMPlaySuccess**\n"
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
                 let leftoverHand = List.fold (fun acc (_,(id, _)) -> MultiSet.removeSingle id acc) st.hand move
@@ -134,19 +134,19 @@ module Scrabble =
                 let lastLetterPlaced = List.last move
                 let st' = State.mkState st.board st.dict st.playerNumber newHand lastLetterPlaced (not st.direction)
                 aux st'
-            | RCM (CMPlayed (pid, ms, points)) ->
+            | RCM (CMPlayed (_pid, _ms, _points)) ->
                 debugPrint "RCMPlayed**\n"
                 (* Successful play by other player. Update your state *)
                 let st' = st // This state needs to be update
                 aux st'
-            | RCM (CMPlayFailed (pid, ms)) ->
+            | RCM (CMPlayFailed (_pid, _ms)) ->
                 debugPrint "RCMPlayFailed**\n"
                 (* Failed play. Update your state *)
                 let st' = st // This state needs to be updated
                 aux st'
             | RCM (CMGameOver _) -> ()
             | RCM a -> failwith (sprintf "not implmented: %A" a)
-            | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st
+            | RGPE err -> debugPrint $"Gameplay Error:\n%A{err}"; aux st
 
 
         aux st
