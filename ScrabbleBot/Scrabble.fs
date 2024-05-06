@@ -42,10 +42,6 @@ module RegEx =
     let printHand pieces hand =
         hand |>
         MultiSet.fold (fun _ x i -> forcePrint (sprintf "%d -> (%A, %d)\n" x (Map.find x pieces) i)) ()
-    
-    let printMysterie hand =
-        hand |>
-        MultiSet.fold (fun _ (id, char) i -> forcePrint (sprintf "%d -> (%c, %d)\n" id char i)) ()
 
 module State = 
     // Make sure to keep your state localised in this module. It makes your life a whole lot easier.
@@ -77,17 +73,16 @@ module State =
         List.map idToChar ids
         
     let idToChar (id: uint32) : char =
-        let charVal = char (id + (uint32 'A' - 1u))
-        if charVal = '@' then 'A' else charVal
+        if id = 0u then 'A'
+        else char (id + (uint32 'A' - 1u))
     
     let idToValue pieces (id : uint32) = (Map.find id pieces) |> Set.minElement |> snd
         
-    let charToLetter ((id, char) : uint32*char) (pieces : Map<uint, tile>): (uint32 * (char * int)) =
+    let charToLetter ((id, char) : uint32*char) (pieces : Map<uint, tile>): uint32 * (char * int) =
         id, (char, idToValue pieces id)
 
 
 module Scrabble =
-    open System.Threading
 
     let playGame cstream pieces (st : State.state) =
 
@@ -95,15 +90,10 @@ module Scrabble =
             Print.printHand pieces (State.hand st)
             // remove the force print when you move on from manual input (or when you have learnt the format)
             // 0 0 5E1 0 1 1A1 0 2 20T1  -> EAT
-            // 0 0 19S1 0 1 5E1 0 2 1A1  -> SEA
-            // 0 0 6F4 0 1 9I1 0 2 14N1  -> FIN (bemærk [('F',4)] angiver point value)
-                    // 1 2 15O1 2 2 20T1 -> OT efter N ovenfor (dvs NOT vandret)
             //forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
 
             let prefix = st.lastLetter |> snd |> (fun (id, (char, value)) -> string char)
-            //let handAsCharList = State.getHandChars st
             let handMultiset = MultiSet.fold (fun acc id amount -> MultiSet.add (id, State.idToChar id) amount acc) MultiSet.empty (State.hand st)
-            Print.printMysterie handMultiset
             let possibleSuffixes = MakeWord.findPossibleSuffixes (State.dict st) handMultiset prefix
             
             debugPrint (sprintf "Possible suffixes: %A\n" possibleSuffixes)
@@ -118,13 +108,13 @@ module Scrabble =
                         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) leftoverHand newTiles
                         let st' = State.mkState st.board st.dict st.playerNumber handSet st.lastLetter st.direction
                         aux st'
-                    | RCM (CMGameOver _) -> (forcePrint "CMGameOver: **Three CMChangeSuccess in a row**\n"); aux st
+                    | RCM (CMGameOver _) -> (forcePrint "CMGameOver: **Three CMChangeSuccess in a row**\n");
                     | RGPE err ->
                         //printfn "Gameplay Error**%A\n" err
                         (forcePrint "Gameplay Error: **Not enough pieces**\n")
                         changeHand handIdList.Tail
                 changeHand (State.getHandIds st)
-            
+            else 
             let suffix = possibleSuffixes |> Set.toList |> List.maxBy List.length            
             let moveStartPos = st.lastLetter |> fst
             let addPos (x, y) index = if st.direction then (x + index, y) else (x, y + index)
