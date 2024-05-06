@@ -72,6 +72,12 @@ module State =
         let idToChar (id: uint32) : char = char (id + offset)
         List.map idToChar ids
     
+    let getHandMulSet st  =
+        let ids = st |> getHandIds
+        let offset = uint32 'A' - 1u
+        let idToChar (id: uint32) : char = char (id + offset)
+        List.map idToChar ids
+        
     let charToLetter (char : char) (pieces : Map<uint, tile>): (uint32 * (char * int)) =
         let offset = uint32 'A' - 1u
         let charToId (c : char) : uint32 = uint32 c - offset
