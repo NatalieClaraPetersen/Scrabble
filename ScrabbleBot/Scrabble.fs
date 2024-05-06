@@ -88,9 +88,6 @@ module Scrabble =
 
         let rec aux (st : State.state) =
             Print.printHand pieces (State.hand st)
-            // remove the force print when you move on from manual input (or when you have learnt the format)
-            // 0 0 5E1 0 1 1A1 0 2 20T1  -> EAT
-            //forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
 
             let prefix = st.lastLetter |> snd |> (fun (id, (char, value)) -> string char)
             let handMultiset = MultiSet.fold (fun acc id amount -> MultiSet.add (id, State.idToChar id) amount acc) MultiSet.empty (State.hand st)
@@ -103,15 +100,15 @@ module Scrabble =
                     let msg = recv cstream
                     match msg with
                     | RCM (CMChangeSuccess(newTiles)) ->
-                        (forcePrint "RCMChangeSuccess**\n")
+                        (debugPrint "RCMChangeSuccess**\n")
                         let leftoverHand = List.fold (fun acc id -> MultiSet.remove id 1u acc) st.hand handIdList
                         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) leftoverHand newTiles
                         let st' = State.mkState st.board st.dict st.playerNumber handSet st.lastLetter st.direction
                         aux st'
-                    | RCM (CMGameOver _) -> (forcePrint "CMGameOver: **Three CMChangeSuccess in a row**\n");
+                    | RCM (CMGameOver _) -> (debugPrint "CMGameOver: **Three CMChangeSuccess in a row**\n");
                     | RGPE err ->
                         //printfn "Gameplay Error**%A\n" err
-                        (forcePrint "Gameplay Error: **Not enough pieces**\n")
+                        (debugPrint "Gameplay Error: **Not enough pieces**\n")
                         changeHand handIdList.Tail
                 changeHand (State.getHandIds st)
             else 
@@ -130,7 +127,7 @@ module Scrabble =
 
             match msg with
             | RCM (CMPlaySuccess(ms, points, newPieces)) ->
-                forcePrint "RCMPlaySuccess**\n"
+                debugPrint "RCMPlaySuccess**\n"
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
                 let leftoverHand = List.fold (fun acc (_,(id, _)) -> MultiSet.removeSingle id acc) st.hand move
                 let newHand = List.fold (fun acc (id, amount) -> MultiSet.add id amount acc) leftoverHand newPieces
@@ -138,16 +135,16 @@ module Scrabble =
                 let st' = State.mkState st.board st.dict st.playerNumber newHand lastLetterPlaced (not st.direction)
                 aux st'
             | RCM (CMPlayed (pid, ms, points)) ->
-                forcePrint "RCMPlayed**\n"
+                debugPrint "RCMPlayed**\n"
                 (* Successful play by other player. Update your state *)
                 let st' = st // This state needs to be update
                 aux st'
             | RCM (CMPlayFailed (pid, ms)) ->
-                forcePrint "RCMPlayFailed**\n"
+                debugPrint "RCMPlayFailed**\n"
                 (* Failed play. Update your state *)
                 let st' = st // This state needs to be updated
                 aux st'
-            | RCM (CMGameOver _) -> (forcePrint "CMGameOver**\n")
+            | RCM (CMGameOver _) -> ()
             | RCM a -> failwith (sprintf "not implmented: %A" a)
             | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st
 
