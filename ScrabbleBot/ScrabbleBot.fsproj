@@ -15,7 +15,6 @@
     <Compile Include="Parser.fsi" />
     <Compile Include="Parser.fs" />
     <Compile Include="Scrabble.fsi" />
-    <Compile Include="MakeWord.fs" />
     <Compile Include="Scrabble.fs" />
   </ItemGroup>
 
@@ -27,9 +26,6 @@
   <ItemGroup>
     <Reference Include="ScrabbleUtil, Culture=neutral, PublicKeyToken=null">
       <HintPath>..\dlls\ScrabbleUtil.dll</HintPath>
-    </Reference>
-    <Reference Include="ScrabbleLib, Culture=neutral, PublicKeyToken=null">
-      <HintPath>..\dlls\ScrabbleLib.dll</HintPath>
     </Reference>
   </ItemGroup>
 

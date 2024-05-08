@@ -1,4 +1,4 @@
-﻿namespace Hoved
+﻿namespace YourClientName
 
 module Scrabble =
 
