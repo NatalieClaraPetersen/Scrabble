@@ -22,12 +22,15 @@ module internal MakeWord
             | None -> acc               // Dead end
             | Some (true, _) -> Set.add currentSuffix acc  // Current path forms a valid terminal word (suffix)
             | Some (false, children) -> // Current path does not form a valid word or is not a terminal node
-                MultiSet.fold
-                    (fun state charTup _ ->
-                        let unusedPieces :MultiSet<(uint32*char)> = MultiSet.removeSingle charTup currentPieces
-                        let suffixList :(uint32*char) List= currentSuffix @ [charTup]
-                        loop children unusedPieces charTup suffixList state
-                    ) acc currentPieces
+                if areSurroundingTilesEmpty (x, y) lettersPlaced dir then
+                    MultiSet.fold
+                        (fun state charTup _ ->
+                            let unusedPieces :MultiSet<(uint32*char)> = MultiSet.removeSingle charTup currentPieces
+                            let suffixList :(uint32*char) List= currentSuffix @ [charTup]
+                            loop children unusedPieces charTup suffixList state
+                        ) acc currentPieces
+                else
+                    acc
         // Initialize the loop with an empty suffix and start on node after prefix
         MultiSet.fold
             (fun acc charTup _ ->
