@@ -57,9 +57,8 @@ module State =
         playerNumber  : uint32
         hand          : MultiSet.MultiSet<uint32>
         lettersPlaced : List<(int * int) * (uint32 * (char * int))>
-        direction     : bool // true = horizontal, false = vertical
     }
-    let mkState b d pn h lp dir = {board = b; dict = d;  playerNumber = pn; hand = h; lettersPlaced = lp; direction = dir}
+    let mkState b d pn h lp = {board = b; dict = d;  playerNumber = pn; hand = h; lettersPlaced = lp}
     let board st         = st.board
     let dict st          = st.dict
     let playerNumber st  = st.playerNumber
@@ -96,14 +95,14 @@ module Scrabble =
             Print.printHand pieces (State.hand st)
             let start = (List.last st.lettersPlaced |> fst) = (-1,0)
             
-            let checkSuffixes (acc: List<uint32 * char> * (int * int)) letter =
+            let checkSuffixes (acc: List<uint32 * char> * (int * int) * bool) letter dir =
                 let moveStartPos = fst letter
-                let validstart =  State.validStartPosition moveStartPos st st.direction
+                let validstart =  State.validStartPosition moveStartPos st dir
                 if not validstart then acc else                   
                     let prefix = snd letter |> (fun (_id, (char, _value)) -> char)
                     let prefixNode = MakeWord.getNodeAfterPrefix (State.dict st) prefix
                     let handAsIdCharMultiset = MultiSet.fold (fun acc id amount -> MultiSet.add (id, (State.idToChar id)) amount acc) MultiSet.empty (State.hand st)
-                    let possibleSuffixes = MakeWord.findPossibleSuffixes prefixNode handAsIdCharMultiset moveStartPos st.lettersPlaced st.direction start
+                    let possibleSuffixes = MakeWord.findPossibleSuffixes prefixNode handAsIdCharMultiset moveStartPos st.lettersPlaced dir start
                 
                     debugPrint (sprintf "Possible suffixes: %A (%A)\n" possibleSuffixes moveStartPos)
                     // Determine the longest suffix in the possible suffixes
@@ -114,16 +113,23 @@ module Scrabble =
                             possibleSuffixes |> Set.toList |> List.maxBy List.length 
 
                     debugPrint (sprintf "Longest suffix: %A\n" longestSuffix)
+                    
+                    // Extract the current longest suffix from the accumulator
+                    let (currentLongestSuffix, _StartPos, _direction) = acc
 
                     // Update the accumulator if the current longest suffix is longer than the previous one
-                    if List.length longestSuffix > List.length (fst acc) then
-                        (longestSuffix, moveStartPos)
+                    if List.length longestSuffix > List.length currentLongestSuffix then
+                        (longestSuffix, moveStartPos, dir)
                     else
                         acc
             
             // Fold over the lettersPlaced to accumulate possible suffixes
-            let initialAcc = ([], (0,0))
-            let (longestSuffix, longestMoveStartPos) = st.lettersPlaced |> List.fold checkSuffixes initialAcc 
+            let initialAcc = ([], (0,0), true)
+            let longestSuffix, longestMoveStartPos, direction =
+                [true;false]
+                |> List.fold (fun acc dir ->
+                    List.fold (fun acc letter -> checkSuffixes acc letter dir) acc st.lettersPlaced
+                ) initialAcc
             
             debugPrint (sprintf "Final suffix: %A (%A)\n" longestSuffix longestMoveStartPos)
             if List.isEmpty longestSuffix then
@@ -135,7 +141,7 @@ module Scrabble =
                         (debugPrint "RCMChangeSuccess**\n")
                         let leftoverHand = List.fold (fun acc id -> MultiSet.remove id 1u acc) st.hand handIdList
                         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) leftoverHand newTiles
-                        let st' = State.mkState st.board st.dict st.playerNumber handSet st.lettersPlaced st.direction
+                        let st' = State.mkState st.board st.dict st.playerNumber handSet st.lettersPlaced
                         aux st'
                     | RCM (CMGameOver _) -> (debugPrint "CMGameOver: **Three CMChangeSuccess in a row**\n");
                     | RGPE _err ->
@@ -144,7 +150,7 @@ module Scrabble =
                         changeHand handIdList.Tail
                 changeHand (State.getHandIds st)
             else         
-            let addPos (x, y) index = if st.direction then (x + index, y) else (x, y + index)
+            let addPos (x, y) index = if direction then (x + index, y) else (x, y + index)
             let move = List.fold (fun acc char -> acc@[(addPos longestMoveStartPos (acc.Length + 1)),(State.charToLetter char pieces)]) [] longestSuffix
             
             //RegEx.printMoveCommand move
@@ -168,7 +174,7 @@ module Scrabble =
                     else
                         List.append st.lettersPlaced move
         
-                let st' = State.mkState st.board st.dict st.playerNumber newHand updatedLetterPlaced (not st.direction)
+                let st': State.state = State.mkState st.board st.dict st.playerNumber newHand updatedLetterPlaced
                 aux st'
             | RCM (CMPlayed (_pid, _ms, _points)) ->
                 debugPrint "RCMPlayed**\n"
@@ -212,5 +218,5 @@ module Scrabble =
         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty hand
         let startingLetter = ((-1, 0), (0u, (' ', 0))) // Only the position is important, the rest is irrelevant
         let initialPlacedLetters = [startingLetter]
-        fun () -> playGame cstream tiles (State.mkState board dict playerNumber handSet initialPlacedLetters true)
+        fun () -> playGame cstream tiles (State.mkState board dict playerNumber handSet initialPlacedLetters)
         
