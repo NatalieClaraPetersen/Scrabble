@@ -1,5 +1,6 @@
 module internal MakeWord
 
+    open System.Threading
     open MultiSet
     open Parser
     open ScrabbleUtil
@@ -13,27 +14,36 @@ module internal MakeWord
     let areSurroundingTilesEmpty (x, y) lettersPlaced dir =
         let checkTile dx dy = Map.tryFind (x + dx, y + dy) (Map.ofList lettersPlaced) |> Option.isNone
         match dir with
-        | false -> checkTile 0 1 && checkTile 0 (-1)
-        | true -> checkTile 1 0 && checkTile (-1) 0
+        | true  -> checkTile 0 1 && checkTile 0 (-1) && checkTile 1 0 // vandret skriveretning
+        | false -> checkTile 1 0 && checkTile (-1) 0 && checkTile 0 1
         
-    let rec findPossibleSuffixes (prefixNode :Dict) (hand :MultiSet<(uint32*char)>) (x, y) lettersPlaced (dir :bool) =
-        let rec loop (currentNode :Dict) (currentPieces :MultiSet<(uint32*char)>) (charTup :uint32*char) (currentSuffix :(uint32*char) List) acc =
+    let rec findPossibleSuffixes (prefixNode :Dict) (hand :MultiSet<(uint32*char)>) (x, y) lettersPlaced (dir :bool) start =
+        let rec loop (currentNode :Dict) (currentPieces :MultiSet<(uint32*char)>) (charTup :uint32*char) (x1, y1) (currentSuffix :(uint32*char) List) acc (start: bool) =
             match step (snd charTup) currentNode with
             | None -> acc               // Dead end
-            | Some (true, _) -> Set.add currentSuffix acc  // Current path forms a valid terminal word (suffix)
+            | Some (true, _) ->
+                let coord = if dir then (x1+1,y1) else (x1,y1+1)
+                let empty = areSurroundingTilesEmpty coord lettersPlaced dir
+                if empty then
+                    Set.add currentSuffix acc
+                else acc  // Current path forms a valid terminal word (suffix)
             | Some (false, children) -> // Current path does not form a valid word or is not a terminal node
-                if areSurroundingTilesEmpty (x, y) lettersPlaced dir then
+                let coord = if dir then (x1+1,y1) else (x1,y1+1)
+                let empty = areSurroundingTilesEmpty coord lettersPlaced dir
+                let ch = (snd charTup)
+                if empty || start then
                     MultiSet.fold
                         (fun state charTup _ ->
                             let unusedPieces :MultiSet<(uint32*char)> = MultiSet.removeSingle charTup currentPieces
                             let suffixList :(uint32*char) List= currentSuffix @ [charTup]
-                            loop children unusedPieces charTup suffixList state
+                            loop children unusedPieces charTup coord suffixList state false
                         ) acc currentPieces
                 else
+                    //if dir then printf "('%c' | %A vandret %A) \n" ch coord currentSuffix else printf "('%c' | %A lodret %A) \n" ch coord currentSuffix
                     acc
         // Initialize the loop with an empty suffix and start on node after prefix
         MultiSet.fold
             (fun acc charTup _ ->
                 let unusedPieces = MultiSet.removeSingle charTup hand
-                loop prefixNode unusedPieces charTup [charTup] acc
+                loop prefixNode unusedPieces charTup (x, y) [charTup] acc start
             ) Set.empty hand

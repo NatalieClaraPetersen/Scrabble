@@ -1,5 +1,6 @@
 ﻿namespace Hoved
 
+open System.Threading
 open ScrabbleLib
 open ScrabbleUtil
 open ScrabbleUtil.ServerCommunication
@@ -83,8 +84,8 @@ module State =
     let validStartPosition (x, y) (st : state) dir =
         let checkTile dx dy = Map.tryFind (x + dx, y + dy) (Map.ofList st.lettersPlaced) |> Option.isNone
         match dir with
-        | false -> checkTile (-1) 0
-        | true -> checkTile 0 (-1)
+        | false -> checkTile 0 (-1) && checkTile 0 1 // lodret
+        | true  -> checkTile (-1) 0 && checkTile 1 0 // vandret
 
 
 module Scrabble =
@@ -93,15 +94,38 @@ module Scrabble =
 
         let rec aux (st : State.state) =
             Print.printHand pieces (State.hand st)
-
-            let moveStartPos = List.last st.lettersPlaced |> fst
-            let prefix = List.last st.lettersPlaced |> snd |> (fun (_id, (char, _value)) -> char)
-            let prefixNode = MakeWord.getNodeAfterPrefix (State.dict st) prefix
-            let handMultiset = MultiSet.fold (fun acc id amount -> MultiSet.add (id, (State.idToChar id)) amount acc) MultiSet.empty (State.hand st)
-            let possibleSuffixes = MakeWord.findPossibleSuffixes prefixNode handMultiset moveStartPos st.lettersPlaced st.direction
+            let checkSuffixes (acc: List<uint32 * char> * (int * int)) letter =
+                let moveStartPos = fst letter
+                let validstart =  State.validStartPosition moveStartPos st st.direction
+                if not validstart then acc else
+                let start = (List.last st.lettersPlaced |> fst) = (-1,0)
+                let prefix = snd letter |> (fun (_id, (char, _value)) -> char)
+                let prefixNode = MakeWord.getNodeAfterPrefix (State.dict st) prefix
+                let handMultiset = MultiSet.fold (fun acc id amount -> MultiSet.add (id, (State.idToChar id)) amount acc) MultiSet.empty (State.hand st)
+                let possibleSuffixes = MakeWord.findPossibleSuffixes prefixNode handMultiset moveStartPos st.lettersPlaced st.direction start
             
-            debugPrint (sprintf "Possible suffixes: %A\n" possibleSuffixes)
-            if Set.isEmpty possibleSuffixes then
+                debugPrint (sprintf "Possible suffixes: %A (%A) %b\n" possibleSuffixes moveStartPos validstart)
+                // Determine the longest suffix in the possible suffixes
+                let longestSuffix = 
+                    if Set.isEmpty possibleSuffixes then 
+                        []
+                    else
+                        possibleSuffixes |> Set.toList |> List.maxBy List.length 
+
+                debugPrint (sprintf "Longest suffix: %A\n" longestSuffix)
+
+                // Update the accumulator if the current longest suffix is longer than the previous one
+                if List.length longestSuffix > List.length (fst acc) then
+                    (longestSuffix, moveStartPos)
+                else
+                    acc
+            
+            // Fold over the lettersPlaced to accumulate possible suffixes
+            let initialAcc = ([], (0,0))
+            let (longestSuffix, longestMoveStartPos) = List.fold checkSuffixes initialAcc st.lettersPlaced
+            
+            debugPrint (sprintf "Final suffix: %A (%A)\n" longestSuffix longestMoveStartPos)
+            if List.isEmpty longestSuffix then
                 let rec changeHand handIdList =
                     send cstream (SMChange handIdList)
                     let msg = recv cstream
@@ -118,18 +142,18 @@ module Scrabble =
                         (debugPrint "Gameplay Error: **Not enough pieces**\n")
                         changeHand handIdList.Tail
                 changeHand (State.getHandIds st)
-            else 
-            let suffix = possibleSuffixes |> Set.toList |> List.maxBy List.length            
+            else         
             let addPos (x, y) index = if st.direction then (x + index, y) else (x, y + index)
-            let move = List.fold (fun acc char -> acc@[(addPos moveStartPos (acc.Length + 1)),(State.charToLetter char pieces)]) [] suffix
+            let move = List.fold (fun acc char -> acc@[(addPos longestMoveStartPos (acc.Length + 1)),(State.charToLetter char pieces)]) [] longestSuffix
             
-            RegEx.printMoveCommand move
+            //RegEx.printMoveCommand move
 
-            debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
+            //debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
             send cstream (SMPlay move)
 
             let msg = recv cstream
-            debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
+            Thread.Sleep(1000)
+            //debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
 
             match msg with
             | RCM (CMPlaySuccess(_ms, _points, newPieces)) ->
@@ -137,7 +161,12 @@ module Scrabble =
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
                 let leftoverHand = List.fold (fun acc (_,(id, _)) -> MultiSet.removeSingle id acc) st.hand move
                 let newHand = List.fold (fun acc (id, amount) -> MultiSet.add id amount acc) leftoverHand newPieces
-                let updatedLetterPlaced = List.append st.lettersPlaced move
+                let updatedLetterPlaced =
+                    if (List.last st.lettersPlaced |> fst) = (-1,0) then
+                        move
+                    else
+                        List.append st.lettersPlaced move
+        
                 let st' = State.mkState st.board st.dict st.playerNumber newHand updatedLetterPlaced (not st.direction)
                 aux st'
             | RCM (CMPlayed (_pid, _ms, _points)) ->
