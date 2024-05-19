@@ -94,35 +94,36 @@ module Scrabble =
 
         let rec aux (st : State.state) =
             Print.printHand pieces (State.hand st)
+            let start = (List.last st.lettersPlaced |> fst) = (-1,0)
+            
             let checkSuffixes (acc: List<uint32 * char> * (int * int)) letter =
                 let moveStartPos = fst letter
                 let validstart =  State.validStartPosition moveStartPos st st.direction
-                if not validstart then acc else
-                let start = (List.last st.lettersPlaced |> fst) = (-1,0)
-                let prefix = snd letter |> (fun (_id, (char, _value)) -> char)
-                let prefixNode = MakeWord.getNodeAfterPrefix (State.dict st) prefix
-                let handMultiset = MultiSet.fold (fun acc id amount -> MultiSet.add (id, (State.idToChar id)) amount acc) MultiSet.empty (State.hand st)
-                let possibleSuffixes = MakeWord.findPossibleSuffixes prefixNode handMultiset moveStartPos st.lettersPlaced st.direction start
-            
-                debugPrint (sprintf "Possible suffixes: %A (%A) %b\n" possibleSuffixes moveStartPos validstart)
-                // Determine the longest suffix in the possible suffixes
-                let longestSuffix = 
-                    if Set.isEmpty possibleSuffixes then 
-                        []
+                if not validstart then acc else                   
+                    let prefix = snd letter |> (fun (_id, (char, _value)) -> char)
+                    let prefixNode = MakeWord.getNodeAfterPrefix (State.dict st) prefix
+                    let handAsIdCharMultiset = MultiSet.fold (fun acc id amount -> MultiSet.add (id, (State.idToChar id)) amount acc) MultiSet.empty (State.hand st)
+                    let possibleSuffixes = MakeWord.findPossibleSuffixes prefixNode handAsIdCharMultiset moveStartPos st.lettersPlaced st.direction start
+                
+                    debugPrint (sprintf "Possible suffixes: %A (%A)\n" possibleSuffixes moveStartPos)
+                    // Determine the longest suffix in the possible suffixes
+                    let longestSuffix = 
+                        if Set.isEmpty possibleSuffixes then 
+                            []
+                        else
+                            possibleSuffixes |> Set.toList |> List.maxBy List.length 
+
+                    debugPrint (sprintf "Longest suffix: %A\n" longestSuffix)
+
+                    // Update the accumulator if the current longest suffix is longer than the previous one
+                    if List.length longestSuffix > List.length (fst acc) then
+                        (longestSuffix, moveStartPos)
                     else
-                        possibleSuffixes |> Set.toList |> List.maxBy List.length 
-
-                debugPrint (sprintf "Longest suffix: %A\n" longestSuffix)
-
-                // Update the accumulator if the current longest suffix is longer than the previous one
-                if List.length longestSuffix > List.length (fst acc) then
-                    (longestSuffix, moveStartPos)
-                else
-                    acc
+                        acc
             
             // Fold over the lettersPlaced to accumulate possible suffixes
             let initialAcc = ([], (0,0))
-            let (longestSuffix, longestMoveStartPos) = List.fold checkSuffixes initialAcc st.lettersPlaced
+            let (longestSuffix, longestMoveStartPos) = st.lettersPlaced |> List.fold checkSuffixes initialAcc 
             
             debugPrint (sprintf "Final suffix: %A (%A)\n" longestSuffix longestMoveStartPos)
             if List.isEmpty longestSuffix then
