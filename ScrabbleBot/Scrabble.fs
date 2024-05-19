@@ -30,64 +30,14 @@ module RegEx =
         Seq.toList
 
 
- module Print =
+module Print =
 
     let printHand pieces hand =
         hand |>
         MultiSet.fold (fun _ x i -> debugPrint (sprintf "%d -> (%A, %d)\n" x (Map.find x pieces) i)) ()
-
-module State = 
-    // Make sure to keep your state localised in this module. It makes your life a whole lot easier.
-    // Currently, it only keeps track of your hand, your player numer, your board, and your dictionary,
-    // but it could, potentially, keep track of other useful
-    // information, such as number of players, player turn, etc.
-
-    type state = {
-        board         : simpleBoardFun
-        dict          : Dictionary.Dict
-        playerNumber  : uint32
-        hand          : MultiSet.MultiSet<uint32>
-        lettersPlaced : List<(int * int) * (uint32 * (char * int))>
-    }
-    let mkState b d pn h lp = {board = b; dict = d;  playerNumber = pn; hand = h; lettersPlaced = lp}
-    let board st         = st.board
-    let dict st          = st.dict
-    let playerNumber st  = st.playerNumber
-    let hand st          = st.hand
-    
-    let getHandIds st = (hand st) |> MultiSet.fold (fun acc x i -> (List.replicate (int i) x) @ acc) []
-    let getHandChars st : char List =
-        let ids = st |> getHandIds
-        let offset = uint32 'A' - 1u
-        let idToChar (id: uint32) : char = char (id + offset)
-        List.map idToChar ids
-        
-    let idToChar (id: uint32) : char =
-        if id = 0u then 'A'
-        else char (id + (uint32 'A' - 1u))
-    
-    let idToValue pieces (id : uint32) : int = (Map.find id pieces) |> Set.minElement |> snd
-        
-    let charToLetter ((id, char) : uint32*char) (pieces : Map<uint, tile>): uint32 * (char * int) =
-        id, (char, idToValue pieces id)
-    
-    let maxPiecesToChange st =
-        let letterCount = List.length st.lettersPlaced
-        let handCount = MultiSet.size st.hand
-        let amountOfPiecesLeft = 104 - int handCount - letterCount
-        min 7 amountOfPiecesLeft
-        
-    let validStartPosition (x, y) (st : state) dir =
-        let checkTile dx dy = Map.tryFind (x + dx, y + dy) (Map.ofList st.lettersPlaced) |> Option.isNone
-        match dir with
-        | false -> checkTile 0 -1 && checkTile 0 1 // lodret
-        | true  -> checkTile -1 0 && checkTile 1 0 // vandret
-
-
 module Scrabble =
 
     let playGame cstream pieces (st : State.state) =
-
         let rec aux (st : State.state) =
             Print.printHand pieces (State.hand st)
             let start = (List.last st.lettersPlaced |> fst) = (-1,0)

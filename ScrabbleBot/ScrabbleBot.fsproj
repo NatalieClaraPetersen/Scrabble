@@ -14,8 +14,9 @@
     <Compile Include="Eval.fs" />
     <Compile Include="Parser.fsi" />
     <Compile Include="Parser.fs" />
-    <Compile Include="Scrabble.fsi" />
     <Compile Include="MakeWord.fs" />
+    <Compile Include="State.fs" />
+    <Compile Include="Scrabble.fsi" />
     <Compile Include="Scrabble.fs" />
   </ItemGroup>
 
