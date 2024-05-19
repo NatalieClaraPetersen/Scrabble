@@ -5,17 +5,18 @@ module internal MakeWord
     open ScrabbleUtil
     open ScrabbleUtil.Dictionary
     
-    let getNodeAfterPrefix (trieRoot: Dict) (prefix: string) =
-        let rec loop node chars =
-            match chars with
-            | [] -> node  // Entire prefix is valid if we've processed all characters
-            | char :: remainingChars ->
-                match ScrabbleUtil.Dictionary.step char node with
-                | Some (_, childNode) -> loop childNode remainingChars
-                | None -> trieRoot  // Prefix not found in trie
-        loop trieRoot (List.ofSeq prefix)
+    let getNodeAfterPrefix (trieRoot: Dict) (prefix: char) =
+        match ScrabbleUtil.Dictionary.step prefix trieRoot with
+        | Some (_, childNode) -> childNode
+        | None -> trieRoot  // Prefix not found in trie
         
-    let rec findPossibleSuffixes (dict :Dict) (hand :MultiSet<(uint32*char)>) (prefix :string) =
+    let areSurroundingTilesEmpty (x, y) lettersPlaced dir =
+        let checkTile dx dy = Map.tryFind (x + dx, y + dy) (Map.ofList lettersPlaced) |> Option.isNone
+        match dir with
+        | false -> checkTile 0 1 && checkTile 0 (-1)
+        | true -> checkTile 1 0 && checkTile (-1) 0
+        
+    let rec findPossibleSuffixes (prefixNode :Dict) (hand :MultiSet<(uint32*char)>) (x, y) lettersPlaced (dir :bool) =
         let rec loop (currentNode :Dict) (currentPieces :MultiSet<(uint32*char)>) (charTup :uint32*char) (currentSuffix :(uint32*char) List) acc =
             match step (snd charTup) currentNode with
             | None -> acc               // Dead end
@@ -28,7 +29,6 @@ module internal MakeWord
                         loop children unusedPieces charTup suffixList state
                     ) acc currentPieces
         // Initialize the loop with an empty suffix and start on node after prefix
-        let prefixNode = getNodeAfterPrefix dict prefix
         MultiSet.fold
             (fun acc charTup _ ->
                 let unusedPieces = MultiSet.removeSingle charTup hand

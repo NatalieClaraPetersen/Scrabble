@@ -5,6 +5,7 @@ open ScrabbleUtil
 open ScrabbleUtil.ServerCommunication
 open ScrabbleUtil.DebugPrint
 open System.IO
+open StateMonad
 
 
 // The RegEx module is only used to parse human input. It is not used for the final product.
@@ -54,12 +55,10 @@ module State =
         dict          : Dictionary.Dict
         playerNumber  : uint32
         hand          : MultiSet.MultiSet<uint32>
-        lastLetter    : (int * int) * (uint32 * (char * int))
+        lettersPlaced : List<(int * int) * (uint32 * (char * int))>
         direction     : bool // true = horizontal, false = vertical
     }
-
-    let mkState b d pn h ll dir = {board = b; dict = d;  playerNumber = pn; hand = h; lastLetter = ll; direction = dir}
-
+    let mkState b d pn h lp dir = {board = b; dict = d;  playerNumber = pn; hand = h; lettersPlaced = lp; direction = dir}
     let board st         = st.board
     let dict st          = st.dict
     let playerNumber st  = st.playerNumber
@@ -76,10 +75,16 @@ module State =
         if id = 0u then 'A'
         else char (id + (uint32 'A' - 1u))
     
-    let idToValue pieces (id : uint32) = (Map.find id pieces) |> Set.minElement |> snd
+    let idToValue pieces (id : uint32) : int = (Map.find id pieces) |> Set.minElement |> snd
         
     let charToLetter ((id, char) : uint32*char) (pieces : Map<uint, tile>): uint32 * (char * int) =
         id, (char, idToValue pieces id)
+        
+    let validStartPosition (x, y) (st : state) dir =
+        let checkTile dx dy = Map.tryFind (x + dx, y + dy) (Map.ofList st.lettersPlaced) |> Option.isNone
+        match dir with
+        | false -> checkTile (-1) 0
+        | true -> checkTile 0 (-1)
 
 
 module Scrabble =
@@ -89,9 +94,11 @@ module Scrabble =
         let rec aux (st : State.state) =
             Print.printHand pieces (State.hand st)
 
-            let prefix = st.lastLetter |> snd |> (fun (_id, (char, _value)) -> string char)
-            let handMultiset = MultiSet.fold (fun acc id amount -> MultiSet.add (id, State.idToChar id) amount acc) MultiSet.empty (State.hand st)
-            let possibleSuffixes = MakeWord.findPossibleSuffixes (State.dict st) handMultiset prefix
+            let moveStartPos = List.last st.lettersPlaced |> fst
+            let prefix = List.last st.lettersPlaced |> snd |> (fun (_id, (char, _value)) -> char)
+            let prefixNode = MakeWord.getNodeAfterPrefix (State.dict st) prefix
+            let handMultiset = MultiSet.fold (fun acc id amount -> MultiSet.add (id, (State.idToChar id)) amount acc) MultiSet.empty (State.hand st)
+            let possibleSuffixes = MakeWord.findPossibleSuffixes prefixNode handMultiset moveStartPos st.lettersPlaced st.direction
             
             debugPrint (sprintf "Possible suffixes: %A\n" possibleSuffixes)
             if Set.isEmpty possibleSuffixes then
@@ -103,7 +110,7 @@ module Scrabble =
                         (debugPrint "RCMChangeSuccess**\n")
                         let leftoverHand = List.fold (fun acc id -> MultiSet.remove id 1u acc) st.hand handIdList
                         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) leftoverHand newTiles
-                        let st' = State.mkState st.board st.dict st.playerNumber handSet st.lastLetter st.direction
+                        let st' = State.mkState st.board st.dict st.playerNumber handSet st.lettersPlaced st.direction
                         aux st'
                     | RCM (CMGameOver _) -> (debugPrint "CMGameOver: **Three CMChangeSuccess in a row**\n");
                     | RGPE _err ->
@@ -113,7 +120,6 @@ module Scrabble =
                 changeHand (State.getHandIds st)
             else 
             let suffix = possibleSuffixes |> Set.toList |> List.maxBy List.length            
-            let moveStartPos = st.lastLetter |> fst
             let addPos (x, y) index = if st.direction then (x + index, y) else (x, y + index)
             let move = List.fold (fun acc char -> acc@[(addPos moveStartPos (acc.Length + 1)),(State.charToLetter char pieces)]) [] suffix
             
@@ -131,8 +137,8 @@ module Scrabble =
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
                 let leftoverHand = List.fold (fun acc (_,(id, _)) -> MultiSet.removeSingle id acc) st.hand move
                 let newHand = List.fold (fun acc (id, amount) -> MultiSet.add id amount acc) leftoverHand newPieces
-                let lastLetterPlaced = List.last move
-                let st' = State.mkState st.board st.dict st.playerNumber newHand lastLetterPlaced (not st.direction)
+                let updatedLetterPlaced = List.append st.lettersPlaced move
+                let st' = State.mkState st.board st.dict st.playerNumber newHand updatedLetterPlaced (not st.direction)
                 aux st'
             | RCM (CMPlayed (_pid, _ms, _points)) ->
                 debugPrint "RCMPlayed**\n"
@@ -175,6 +181,6 @@ module Scrabble =
                   
         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty hand
         let startingLetter = ((-1, 0), (0u, (' ', 0))) // Only the position is important, the rest is irrelevant
-
-        fun () -> playGame cstream tiles (State.mkState board dict playerNumber handSet startingLetter true)
+        let initialPlacedLetters = [startingLetter]
+        fun () -> playGame cstream tiles (State.mkState board dict playerNumber handSet initialPlacedLetters true)
         
