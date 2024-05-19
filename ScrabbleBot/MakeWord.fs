@@ -20,14 +20,15 @@ module internal MakeWord
     let rec findPossibleSuffixes (prefixNode :Dict) (hand :MultiSet<(uint32*char)>) (x, y) lettersPlaced (dir :bool) start =
         let rec loop (currentNode :Dict) (currentPieces :MultiSet<(uint32*char)>) (charTup :uint32*char) (x1, y1) (currentSuffix :(uint32*char) List) acc (start: bool) =
             match step (snd charTup) currentNode with
-            | None -> acc               // Dead end
+            | None -> acc                     // Dead end
             | Some (true, _) ->
                 let coord = if dir then (x1+1,y1) else (x1,y1+1)
                 let empty = areSurroundingTilesEmpty coord lettersPlaced dir
                 if empty then
-                    Set.add currentSuffix acc
-                else acc  // Current path forms a valid terminal word (suffix)
-            | Some (false, children) -> // Current path does not form a valid word or is not a terminal node
+                    Set.add currentSuffix acc // Current path forms a valid terminal word (suffix)
+                else
+                    acc  
+            | Some (false, children) ->       // Current path does not form a valid word or is not a terminal node
                 let coord = if dir then (x1+1,y1) else (x1,y1+1)
                 let empty = areSurroundingTilesEmpty coord lettersPlaced dir
                 if empty || start then
@@ -38,7 +39,6 @@ module internal MakeWord
                             loop children unusedPieces charTup coord suffixList state false
                         ) acc currentPieces
                 else
-                    //if dir then printf "('%c' | %A vandret %A) \n" ch coord currentSuffix else printf "('%c' | %A lodret %A) \n" ch coord currentSuffix
                     acc
         // Initialize the loop with an empty suffix and start on node after prefix
         MultiSet.fold
