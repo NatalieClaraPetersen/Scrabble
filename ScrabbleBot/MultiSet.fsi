@@ -10,3 +10,4 @@ module internal MultiSet
     // NEW
     val remove : 'a -> uint32 -> MultiSet<'a> -> MultiSet<'a>
     val removeSingle : 'a -> MultiSet<'a> -> MultiSet<'a>
+    val size : MultiSet<'a> -> uint32
