@@ -30,7 +30,6 @@ module internal MakeWord
             | Some (false, children) -> // Current path does not form a valid word or is not a terminal node
                 let coord = if dir then (x1+1,y1) else (x1,y1+1)
                 let empty = areSurroundingTilesEmpty coord lettersPlaced dir
-                let ch = (snd charTup)
                 if empty || start then
                     MultiSet.fold
                         (fun state charTup _ ->

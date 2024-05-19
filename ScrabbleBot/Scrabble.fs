@@ -28,13 +28,6 @@ module RegEx =
                     ((x |> int, y |> int), (id |> uint32, (c |> char, p |> int)))
                 | _ -> failwith "Failed (should never happen)") |>
         Seq.toList
-        
-    // Function to print a single MoveCommand
-    let printMoveCommand (moves : ((int * int) * (uint32 * (char * int))) list) =
-        moves |> List.iteri (fun index ((x, y), (pieceId, (character, pointValue))) ->
-        debugPrint $"Move %d{index + 1}: (%d{x}, %d{y}) -> (%u{pieceId}, ('%c{character}', %d{pointValue}))"
-    )
-
 
 
  module Print =
@@ -82,7 +75,8 @@ module State =
         let letterCount = List.length st.lettersPlaced
         let handCount = MultiSet.size st.hand
         let amountOfPiecesLeft = 104 - int handCount - letterCount
-        min 7 amountOfPiecesLeft 
+        min 7 amountOfPiecesLeft
+        
     let validStartPosition (x, y) (st : state) dir =
         let checkTile dx dy = Map.tryFind (x + dx, y + dy) (Map.ofList st.lettersPlaced) |> Option.isNone
         match dir with
