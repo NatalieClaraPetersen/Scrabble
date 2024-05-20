@@ -31,9 +31,10 @@ module internal State
         let updateHand = List.fold (fun acc (_coord, (id, (_char, _val))) -> MultiSet.removeSingle id acc) st.hand ms
         mkState st.board st.dict updateHand st.lettersPlaced
         
-    let swap (pieces: uint32 list) (st: state): state =
-        let updateHand = List.fold (fun acc id -> MultiSet.removeSingle id acc) st.hand pieces
-        mkState st.board st.dict updateHand st.lettersPlaced
+    let swap (pieces: uint32 list) (st: state) (newTiles: (uint32 * uint32) list): state =
+        let removeFromHand = List.fold (fun acc id -> MultiSet.removeSingle id acc) st.hand pieces
+        let addToHand = List.fold (fun acc (x, k) -> MultiSet.add x k acc) removeFromHand newTiles
+        mkState st.board st.dict addToHand st.lettersPlaced
         
     let updateBoard (ms: move) (st: state): state =
         let updateLettersPlaced = List.fold (fun acc (coord, (_id, (char, _val))) -> Map.add coord char acc) st.lettersPlaced ms

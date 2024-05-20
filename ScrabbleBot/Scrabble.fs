@@ -59,7 +59,7 @@ module Scrabble =
             match msg with
             | RCM (CMChangeSuccess(newTiles)) ->
                 let st' =
-                    State.swap(MakeWord.handToList st) st |> State.add newTiles
+                    State.swap(MakeWord.handToList st) st newTiles
                 aux st'
                 
             | RCM (CMGameOver _) ->
