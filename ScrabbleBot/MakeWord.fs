@@ -4,18 +4,18 @@ module internal MakeWord
     open ScrabbleUtil
     open ScrabbleUtil.Dictionary
     open State
-    let isValidTile x y (st: state) =
+    let isTileEmpty x y (st: state) =
         st.lettersPlaced |> Map.tryFind (x, y) |> Option.isNone
     
     let isValidStartPos ((x, y): coord) (dir: direction) (st: state) =
         match dir with
-        | Right -> isValidTile (x-1) y st
-        | Down  -> isValidTile x (y-1) st
+        | Right -> isTileEmpty (x-1) y st
+        | Down  -> isTileEmpty x (y-1) st
 
-    let areSurroundingTilesEmpty ((x, y): coord) (dir: direction) (hasStarted: bool) (st: state) =
+    let areSurroundingTilesEmpty ((x, y): coord) (dir: direction) (st: state) =
         match dir with
-        | Right -> isValidTile x (y+1) st && isValidTile x (y-1) st && (not hasStarted || isValidTile (x+1) y st)
-        | Down  -> isValidTile (x+1) y st && isValidTile (x-1) y st && (not hasStarted || isValidTile x (y+1) st)
+        | Right -> isTileEmpty x (y+1) st && isTileEmpty x (y-1) st && isTileEmpty (x+1) y st
+        | Down  -> isTileEmpty (x+1) y st && isTileEmpty (x-1) y st && isTileEmpty x (y+1) st
        
     let tilesForSwappies (st: state) =
         let handList = st.hand |> toList |> List.rev
@@ -42,7 +42,7 @@ module internal MakeWord
                         if isTerminal &&
                            List.length currentMove > 0 &&
                            nextHasStarted &&
-                           areSurroundingTilesEmpty pos direction nextHasStarted st
+                           areSurroundingTilesEmpty pos direction st
                         then
                             currentMove :: possibleMoves
                         else

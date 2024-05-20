@@ -41,7 +41,7 @@ module internal State
         
     let updateBoard (move: move) (st: state): state =
         let updateLettersPlaced = List.fold (fun acc (coord, (_id, (char, _val))) -> Map.add coord char acc) st.lettersPlaced move
-        let updatedTilesLeft = st.tilesLeft - List.length move
+        let updatedTilesLeft = max 0 (st.tilesLeft - List.length move)
         debugPrint $"Tiles left: {updatedTilesLeft}\n"
         { st with lettersPlaced = updateLettersPlaced ; tilesLeft = updatedTilesLeft }
     
