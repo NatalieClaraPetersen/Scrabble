@@ -40,6 +40,8 @@ module Scrabble =
         let rec aux (st : State.state) =
             let move = MakeWord.getMove st pieces
             
+            Print.printHand pieces st.hand
+            
             if move.IsEmpty then
                 if MakeWord.canSwap st then
                     debugPrint "No moves found. Swapping..."
