@@ -16,7 +16,6 @@ module internal MakeWord
         match dir with
         | Right -> checkTile 0 1 && checkTile 0 -1 && (not hasStarted || checkTile 1 0)
         | Down  -> checkTile 1 0 && checkTile -1 0 && (not hasStarted || checkTile 0 1)
-
         
     let getLongestWord (words: List<move>) =
         match words with

@@ -59,7 +59,7 @@ module Scrabble =
             match msg with
             | RCM (CMChangeSuccess(newTiles)) ->
                 let st' =
-                    State.swap(MakeWord.handToList st) st newTiles
+                    State.change(MakeWord.handToList st) st newTiles
                 aux st'
                 
             | RCM (CMGameOver _) ->
@@ -92,8 +92,6 @@ module Scrabble =
 
             | RCM a -> failwith (sprintf "not implmented: %A" a)
             
-
-
         aux st
 
     let startGame 
