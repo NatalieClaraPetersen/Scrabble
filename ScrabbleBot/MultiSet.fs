@@ -34,7 +34,7 @@ module internal MultiSet
     let foldBack (folder: 'a -> uint32 -> 'b -> 'b) (R ms: MultiSet<'a>) (acc: 'b) = Map.foldBack folder ms acc
     
     let ofList (_ : 'a list) : MultiSet<'a> = failwith "not implemented"
-    let toList (_ : MultiSet<'a>) : 'a list = []
+    let toList (R ms : MultiSet<'a>) : 'a list = Map.fold (fun acc elem count -> acc @ List.init (int count) (fun _ -> elem)) [] ms
 
 
     let map (_ : 'a -> 'b) (_ : MultiSet<'a>) : MultiSet<'b> = failwith "not implemented"

@@ -77,8 +77,15 @@ module internal Parser
     let NegParse = unop (pchar '-') AtomParse |>> (fun x -> Mul(N (-1), x)) <?> "Neg"
     let PVParse = unop pPointValue (parenthesise TermParse) |>> PV <?> "PV"
     let CharToIntParse = unop pCharToInt (parenthesise CharParse) |>> CharToInt <?> "CharToInt"
-    do aref := choice [NegParse; CharToIntParse; PVParse; ParParse; VParse; NParse]
+    do aref := choice [NegParse; CharToIntParse; PVParse; ParParse; NParse ;VParse]
 
+    let CharLitParse = pchar '\'' >>. anyChar .>> pchar '\'' |>> C
+    let CharValueParse = unop pCharValue (parenthesise TermParse) |>> CV
+    let ToUpperParse = unop pToUpper (parenthesise CharParse) |>> ToUpper
+    let ToLowerParse = unop pToLower (parenthesise CharParse) |>> ToLower
+    let IntToCharParse = unop pIntToChar (parenthesise TermParse) |>> IntToChar
+    do cref := choice [CharLitParse; CharValueParse; ToUpperParse; ToLowerParse; IntToCharParse]
+    
     let AexpParse = TermParse 
 
     let CexpParse = CharParse

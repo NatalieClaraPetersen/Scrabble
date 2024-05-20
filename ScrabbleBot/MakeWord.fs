@@ -1,48 +1,118 @@
 module internal MakeWord
 
-    open System.Threading
     open MultiSet
     open ScrabbleUtil
     open ScrabbleUtil.Dictionary
     open State
-    
-    let getNodeAfterPrefix (trieRoot: Dict) (prefix: char) =
-        match ScrabbleUtil.Dictionary.step prefix trieRoot with
-        | Some (_, childNode) -> childNode
-        | None -> trieRoot  // Prefix not found in trie
         
-    let areSurroundingTilesEmpty (x, y) lettersPlaced dir =
-        let checkTile dx dy = Map.tryFind (x + dx, y + dy) (Map.ofList lettersPlaced) |> Option.isNone
+    let isGoodStartPos ((x, y): coord) (st: state) (dir: direction) =
+        let checkTile dx dy = Map.tryFind (x + dx, y + dy) st.lettersPlaced |> Option.isNone
         match dir with
-        | true  -> checkTile 0 1 && checkTile 0 (-1) && checkTile 1 0 // vandret skriveretning
-        | false -> checkTile 1 0 && checkTile (-1) 0 && checkTile 0 1    
+        | Right -> checkTile -1 0
+        | Down -> checkTile 0 -1
+
+    let areSurroundingTilesEmpty ((x, y): coord) (st: state) (dir: direction) (hasStarted: bool) =
+        let checkTile dx dy = Map.tryFind (x + dx, y + dy) st.lettersPlaced |> Option.isNone
+        match dir with
+        | Right -> checkTile 0 1 && checkTile 0 -1 && (hasStarted || checkTile 1 0)
+        | Down -> checkTile 1 0 && checkTile -1 0 && (hasStarted || checkTile 0 1)
+
+        
+    let getLongestWord (words: List<move>) =
+        match words with
+        | [] -> []
+        | _ -> List.maxBy List.length words
     
-    let rec findPossibleSuffixes (prefixNode :Dict) (hand :MultiSet<(uint32*char)>) (x, y) lettersPlaced (dir :bool) start =
-        let rec loop (currentNode :Dict) (currentPieces :MultiSet<(uint32*char)>) (charTup :uint32*char) (x1, y1) (currentSuffix :(uint32*char) List) acc (start: bool) =
-            match step (snd charTup) currentNode with
-            | None -> acc                     // Dead end
-            | Some (true, _) ->
-                let coord = if dir then (x1+1,y1) else (x1,y1+1)
-                let empty = areSurroundingTilesEmpty coord lettersPlaced dir
-                if empty then
-                    Set.add currentSuffix acc // Current path forms a valid terminal word (suffix)
-                else
-                    acc  
-            | Some (false, children) ->       // Current path does not form a valid word or is not a terminal node
-                let coord = if dir then (x1+1,y1) else (x1,y1+1)
-                let empty = areSurroundingTilesEmpty coord lettersPlaced dir
-                if empty || start then
-                    MultiSet.fold
-                        (fun state charTup _ ->
-                            let unusedPieces :MultiSet<(uint32*char)> = MultiSet.removeSingle charTup currentPieces
-                            let suffixList :(uint32*char) List= currentSuffix @ [charTup]
-                            loop children unusedPieces charTup coord suffixList state false
-                        ) acc currentPieces
-                else
-                    acc
-        // Initialize the loop with an empty suffix and start on node after prefix
-        MultiSet.fold
-            (fun acc charTup _ ->
-                let unusedPieces = MultiSet.removeSingle charTup hand
-                loop prefixNode unusedPieces charTup (x, y) [charTup] acc start
-            ) Set.empty hand
+    let tilesLeftToSwap (st: state) (maxTiles: int): int =
+        let amountOfPlayedLetters = Map.count st.lettersPlaced |> int
+        let handSize = size st.hand |> int
+        
+        if amountOfPlayedLetters <= 97 then
+            7
+        else if amountOfPlayedLetters + handSize > 97 && amountOfPlayedLetters < 104 then
+            maxTiles - amountOfPlayedLetters 
+        else 0    
+    
+    let canSwap (st: state) =
+        let tilesLeft = tilesLeftToSwap st 104
+        let amountOfPlayedLetters = Map.count st.lettersPlaced |> int 
+        amountOfPlayedLetters + tilesLeft < 104
+        
+    let handToList (st: state) =
+        let tilesLeft = tilesLeftToSwap st 104
+        let handList = toList st.hand
+        List.take tilesLeft handList
+        
+    let getNextMove (usedCoords: List<coord>) (st: state) (tiles: Map<uint32, tile>) =
+        let next (x, y) = function
+            | Right -> (x + 1, y)
+            | Down -> (x, y + 1)
+        
+        let rec move pos direction dict hand currentMove possibleMoves hasStarted startPos =
+            let nextPos = next pos direction
+            let nextHasStarted = if hasStarted then true else pos = startPos
+
+            match Map.tryFind pos st.lettersPlaced with
+            | Some char ->
+                match step char dict with
+                | Some (isTerminal, nextDict) ->
+                    let nextPossibleMoves =
+                        if isTerminal && List.length currentMove > 0 && nextHasStarted && areSurroundingTilesEmpty pos st direction nextHasStarted then
+                            currentMove :: possibleMoves
+                        else
+                            possibleMoves
+                    
+                    move nextPos direction nextDict hand currentMove nextPossibleMoves nextHasStarted startPos
+                | None -> possibleMoves
+            | None -> 
+                checkNextPos pos direction dict hand currentMove possibleMoves hasStarted startPos
+
+        and checkNextPos pos direction dict hand currentMove possibleMoves hasStarted startPos =
+            let nextPos = next pos direction
+            
+            if areSurroundingTilesEmpty pos st direction hasStarted then
+                fold (fun acc id _val ->
+                    let nextHand = removeSingle id hand
+                    let nextPossibleMoves =
+                        Set.fold (fun accu (char, value) ->
+                            let nextMove = currentMove @ [pos, (id, (char, value))]
+
+                            match step char dict with
+                            | Some (isTerminal, nextDict) ->
+                                let newMoves =
+                                    if isTerminal && hasStarted then
+                                        nextMove :: possibleMoves
+                                    else
+                                        possibleMoves
+                                
+                                move nextPos direction nextDict nextHand nextMove newMoves hasStarted startPos @ accu
+                            | None -> accu
+                        ) [] (Map.find id tiles)
+                    nextPossibleMoves @ acc
+                ) possibleMoves hand
+            else
+                possibleMoves
+
+        let goDown pos =
+            match isGoodStartPos pos st Down with // false = down, true = right
+            | true -> move pos Down st.dict st.hand [] [] true pos
+            | false -> []
+
+        let goRight pos =
+            match isGoodStartPos pos st Right with
+            | true -> move pos Right st.dict st.hand [] [] true pos
+            | false -> []
+            
+        getLongestWord (List.fold (fun acc pos ->
+            let down = goDown pos
+            let right = goRight pos
+            acc @ down @ right 
+        ) List.Empty usedCoords)
+
+                
+    let getMove (st: state) (tiles: Map<uint32, tile>) =
+        if st.lettersPlaced.IsEmpty then
+            getNextMove [st.board.center] st tiles
+        else
+            let listOfUsedCoords = st.lettersPlaced |> Map.toList |> List.map fst
+            getNextMove listOfUsedCoords st tiles
