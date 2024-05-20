@@ -9,8 +9,8 @@ module internal MakeWord
     
     let isValidStartPos ((x, y): coord) (dir: direction) (st: state) =
         match dir with
-        | Right -> isTileEmpty (x-1) y st
-        | Down  -> isTileEmpty x (y-1) st
+        | Right -> isTileEmpty (x-1) y st && isTileEmpty (x+1) y st
+        | Down  -> isTileEmpty x (y-1) st && isTileEmpty x (y+1) st
 
     let areSurroundingTilesEmpty ((x, y): coord) (dir: direction) (st: state) =
         match dir with
@@ -27,67 +27,52 @@ module internal MakeWord
             | Right -> (x + 1, y)
             | Down -> (x, y + 1)
         
-        let rec move pos direction dict hand currentMove possibleMoves startPos =
-            let nextPos = next pos direction
-            let isFirstLetter = pos = startPos
-
-            match Map.tryFind pos st.lettersPlaced with
-            | Some char ->
-                match step char dict with
-                | Some (isTerminal, nextDict) ->
-                    let nextPossibleMoves =
-                        if isTerminal &&
-                           List.length currentMove > 0 &&
-                           not isFirstLetter &&
-                           areSurroundingTilesEmpty pos direction st
-                        then
-                            currentMove :: possibleMoves
-                        else
-                            possibleMoves
-                    
-                    move nextPos direction nextDict hand currentMove nextPossibleMoves startPos
-                | None -> possibleMoves
-            | None -> 
-                checkNextPos pos direction dict hand currentMove possibleMoves startPos
-
-
-        and checkNextPos pos direction dict hand currentMove possibleMoves startPos =
-            let nextPos = next pos direction
+        let rec buildMoves currentPos direction dict hand currentMove possibleMoves =
+            let nextPos = next currentPos direction
             
-            if areSurroundingTilesEmpty pos direction st then
+            if areSurroundingTilesEmpty currentPos direction st then
                 fold (fun acc id _val ->
                     let nextHand = removeSingle id hand
 
-                    let nextPossibleMoves = 
+                    let PossibleMoves = 
                         Set.fold (fun acc (char, value) ->
-                            let nextMove = currentMove @ [pos, (id, (char, value))]
-
                             match step char dict with
                             | Some (isTerminal, nextDict) ->
-                                let newMoves =
+                                let nextMove = currentMove @ [currentPos, (id, (char, value))]
+                                let nextPossibleMoves =
                                     if isTerminal then
                                         nextMove :: possibleMoves
                                     else
                                         possibleMoves
                                 
-                                move nextPos direction nextDict nextHand nextMove newMoves startPos @ acc
+                                buildMoves nextPos direction nextDict nextHand nextMove nextPossibleMoves @ acc
                             | None -> acc
                         ) [] (Map.find id tiles)
 
-                    nextPossibleMoves @ acc
+                    PossibleMoves @ acc
                 ) possibleMoves hand
             else
                 possibleMoves
 
-        let buildWordsInDirection pos dir =
-            if isValidStartPos pos dir st then
-                move pos dir st.dict st.hand [] [] pos
+        let buildWordsInDirection startPos dir =
+            let nextPos = next startPos dir
+            
+            if isValidStartPos startPos dir st then
+                match Map.tryFind startPos st.lettersPlaced with
+                | Some startChar -> 
+                    let startDict =
+                        match step startChar st.dict with
+                        | Some (_, nextDict) -> nextDict
+                        | None -> st.dict
+                    buildMoves nextPos dir startDict st.hand [] []
+                | None ->
+                    buildMoves startPos dir st.dict st.hand [] []
             else
                 []
                 
-        let possibleWordsFromPos pos =
-           let right = buildWordsInDirection pos Right
-           let down = buildWordsInDirection pos Down
+        let possibleWordsFromPos startPos =
+           let right = buildWordsInDirection startPos Right
+           let down = buildWordsInDirection startPos Down
            right @ down
         
         let allPossibleWords = List.fold (fun acc pos -> acc @ possibleWordsFromPos pos) List.Empty usedCoords
