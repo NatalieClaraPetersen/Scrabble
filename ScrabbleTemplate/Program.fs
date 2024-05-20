@@ -16,7 +16,7 @@ let spawnMultiples name dict bot =
     aux >> List.rev
 
 [<EntryPoint>]
-let main argv =
+let main _argv =
     ScrabbleUtil.DebugPrint.toggleDebugPrint true // Change to false to supress debug output
 
     System.Console.BackgroundColor <- System.ConsoleColor.White
