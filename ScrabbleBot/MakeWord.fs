@@ -57,7 +57,7 @@ module internal MakeWord
         and checkNextPos pos direction dict hand currentMove possibleMoves hasStarted startPos =
             let nextPos = next pos direction
             
-            if areSurroundingTilesEmpty pos direction hasStarted st then
+            if areSurroundingTilesEmpty pos direction st then
                 fold (fun acc id _val ->
                     let nextHand = removeSingle id hand
 
