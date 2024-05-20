@@ -5,17 +5,17 @@ module internal MakeWord
     open ScrabbleUtil.Dictionary
     open State
         
-    let isGoodStartPos ((x, y): coord) (st: state) (dir: direction) =
+    let isGoodStartPos (x, y) (st: state) dir =
         let checkTile dx dy = Map.tryFind (x + dx, y + dy) st.lettersPlaced |> Option.isNone
         match dir with
-        | Right -> checkTile -1 0
-        | Down -> checkTile 0 -1
+        | Right -> checkTile (-1) 0
+        | Down  -> checkTile 0 (-1)
 
     let areSurroundingTilesEmpty ((x, y): coord) (st: state) (dir: direction) (hasStarted: bool) =
         let checkTile dx dy = Map.tryFind (x + dx, y + dy) st.lettersPlaced |> Option.isNone
         match dir with
-        | Right -> checkTile 0 1 && checkTile 0 -1 && (hasStarted || checkTile 1 0)
-        | Down -> checkTile 1 0 && checkTile -1 0 && (hasStarted || checkTile 0 1)
+        | Right -> checkTile 0 1 && checkTile 0 (-1) && (not hasStarted || checkTile 1 0)
+        | Down  -> checkTile 1 0 && checkTile (-1) 0 && (not hasStarted || checkTile 0 1)
 
         
     let getLongestWord (words: List<move>) =

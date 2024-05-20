@@ -87,7 +87,11 @@ module Scrabble =
                 let st' = st
                 aux st'
 
+            | RCM (CMPassed _) ->
+                aux st
+
             | RCM a -> failwith (sprintf "not implmented: %A" a)
+            
 
 
         aux st
