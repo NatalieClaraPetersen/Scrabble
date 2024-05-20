@@ -49,14 +49,22 @@ module internal MakeWord
         
         let rec move pos direction dict hand currentMove possibleMoves hasStarted startPos =
             let nextPos = next pos direction
-            let nextHasStarted = if hasStarted then true else pos = startPos
+            let nextHasStarted =
+                if hasStarted then
+                    true
+                else
+                    pos = startPos
 
             match Map.tryFind pos st.lettersPlaced with
             | Some char ->
                 match step char dict with
                 | Some (isTerminal, nextDict) ->
                     let nextPossibleMoves =
-                        if isTerminal && List.length currentMove > 0 && nextHasStarted && areSurroundingTilesEmpty pos st direction nextHasStarted then
+                        if isTerminal &&
+                           List.length currentMove > 0 &&
+                           nextHasStarted &&
+                           areSurroundingTilesEmpty pos st direction nextHasStarted
+                        then
                             currentMove :: possibleMoves
                         else
                             possibleMoves
@@ -66,13 +74,15 @@ module internal MakeWord
             | None -> 
                 checkNextPos pos direction dict hand currentMove possibleMoves hasStarted startPos
 
+
         and checkNextPos pos direction dict hand currentMove possibleMoves hasStarted startPos =
             let nextPos = next pos direction
             
             if areSurroundingTilesEmpty pos st direction hasStarted then
                 fold (fun acc id _val ->
                     let nextHand = removeSingle id hand
-                    let nextPossibleMoves =
+
+                    let nextPossibleMoves = 
                         Set.fold (fun accu (char, value) ->
                             let nextMove = currentMove @ [pos, (id, (char, value))]
 
@@ -87,10 +97,12 @@ module internal MakeWord
                                 move nextPos direction nextDict nextHand nextMove newMoves hasStarted startPos @ accu
                             | None -> accu
                         ) [] (Map.find id tiles)
+
                     nextPossibleMoves @ acc
                 ) possibleMoves hand
             else
                 possibleMoves
+
 
         let goDown pos =
             match isGoodStartPos pos st Down with // false = down, true = right
@@ -102,11 +114,12 @@ module internal MakeWord
             | true -> move pos Right st.dict st.hand [] [] true pos
             | false -> []
             
-        getLongestWord (List.fold (fun acc pos ->
-            let down = goDown pos
-            let right = goRight pos
-            acc @ down @ right 
-        ) List.Empty usedCoords)
+        getLongestWord (List.fold
+            (fun acc pos ->
+                let down = goDown pos
+                let right = goRight pos
+                acc @ down @ right)
+            List.Empty usedCoords)
 
                 
     let getMove (st: state) (tiles: Map<uint32, tile>) =
