@@ -19,20 +19,17 @@ module internal MakeWord
        
     let tilesForSwappies (st: state) =
         let handList = st.hand |> toList |> List.rev
-        List.take st.tilesLeft handList
+        let tilesToChangeCount = min st.tilesLeft 7
+        List.take tilesToChangeCount handList
         
     let getNextMove (usedCoords: List<coord>) (tiles: Map<uint32, tile>) (st: state) =
         let next (x, y) = function
             | Right -> (x + 1, y)
             | Down -> (x, y + 1)
         
-        let rec move pos direction dict hand currentMove possibleMoves hasStarted startPos =
+        let rec move pos direction dict hand currentMove possibleMoves startPos =
             let nextPos = next pos direction
-            let nextHasStarted =
-                if hasStarted then
-                    true
-                else
-                    pos = startPos
+            let isFirstLetter = pos = startPos
 
             match Map.tryFind pos st.lettersPlaced with
             | Some char ->
@@ -41,20 +38,20 @@ module internal MakeWord
                     let nextPossibleMoves =
                         if isTerminal &&
                            List.length currentMove > 0 &&
-                           nextHasStarted &&
+                           not isFirstLetter &&
                            areSurroundingTilesEmpty pos direction st
                         then
                             currentMove :: possibleMoves
                         else
                             possibleMoves
                     
-                    move nextPos direction nextDict hand currentMove nextPossibleMoves nextHasStarted startPos
+                    move nextPos direction nextDict hand currentMove nextPossibleMoves startPos
                 | None -> possibleMoves
             | None -> 
-                checkNextPos pos direction dict hand currentMove possibleMoves hasStarted startPos
+                checkNextPos pos direction dict hand currentMove possibleMoves startPos
 
 
-        and checkNextPos pos direction dict hand currentMove possibleMoves hasStarted startPos =
+        and checkNextPos pos direction dict hand currentMove possibleMoves startPos =
             let nextPos = next pos direction
             
             if areSurroundingTilesEmpty pos direction st then
@@ -68,12 +65,12 @@ module internal MakeWord
                             match step char dict with
                             | Some (isTerminal, nextDict) ->
                                 let newMoves =
-                                    if isTerminal && hasStarted then
+                                    if isTerminal then
                                         nextMove :: possibleMoves
                                     else
                                         possibleMoves
                                 
-                                move nextPos direction nextDict nextHand nextMove newMoves hasStarted startPos @ acc
+                                move nextPos direction nextDict nextHand nextMove newMoves startPos @ acc
                             | None -> acc
                         ) [] (Map.find id tiles)
 
@@ -84,7 +81,7 @@ module internal MakeWord
 
         let buildWordsInDirection pos dir =
             if isValidStartPos pos dir st then
-                move pos dir st.dict st.hand [] [] true pos
+                move pos dir st.dict st.hand [] [] pos
             else
                 []
                 
