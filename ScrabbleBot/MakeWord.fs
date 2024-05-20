@@ -4,45 +4,24 @@ module internal MakeWord
     open ScrabbleUtil
     open ScrabbleUtil.Dictionary
     open State
-        
-    let isGoodStartPos ((x, y): coord) (st: state) (dir: direction) =
-        let checkTile dx dy = Map.tryFind (x + dx, y + dy) st.lettersPlaced |> Option.isNone
+    let isValidTile x y (st: state) =
+        st.lettersPlaced |> Map.tryFind (x, y) |> Option.isNone
+    
+    let isValidStartPos ((x, y): coord) (dir: direction) (st: state) =
         match dir with
-        | Right -> checkTile -1 0
-        | Down  -> checkTile 0 -1
+        | Right -> isValidTile (x-1) y st
+        | Down  -> isValidTile x (y-1) st
 
-    let areSurroundingTilesEmpty ((x, y): coord) (st: state) (dir: direction) (hasStarted: bool) =
-        let checkTile dx dy = Map.tryFind (x + dx, y + dy) st.lettersPlaced |> Option.isNone
+    let areSurroundingTilesEmpty ((x, y): coord) (dir: direction) (hasStarted: bool) (st: state) =
         match dir with
-        | Right -> checkTile 0 1 && checkTile 0 -1 && (not hasStarted || checkTile 1 0)
-        | Down  -> checkTile 1 0 && checkTile -1 0 && (not hasStarted || checkTile 0 1)
+        | Right -> isValidTile x (y+1) st && isValidTile x (y-1) st && (not hasStarted || isValidTile (x+1) y st)
+        | Down  -> isValidTile (x+1) y st && isValidTile (x-1) y st && (not hasStarted || isValidTile x (y+1) st)
+       
+    let tilesForSwappies (st: state) =
+        let handList = st.hand |> toList |> List.rev
+        List.take st.tilesLeft handList
         
-    let getLongestWord (words: List<move>) =
-        match words with
-        | [] -> []
-        | _ -> List.maxBy List.length words
-    
-    let tilesLeftToSwap (st: state) (maxTiles: int): int =
-        let amountOfPlayedLetters = Map.count st.lettersPlaced |> int
-        let handSize = size st.hand |> int
-        
-        if amountOfPlayedLetters <= 97 then
-            7
-        else if amountOfPlayedLetters + handSize > 97 && amountOfPlayedLetters < 104 then
-            maxTiles - amountOfPlayedLetters 
-        else 0    
-    
-    let canSwap (st: state) =
-        let tilesLeft = tilesLeftToSwap st 104
-        let amountOfPlayedLetters = Map.count st.lettersPlaced |> int 
-        amountOfPlayedLetters + tilesLeft < 104
-        
-    let handToList (st: state) =
-        let tilesLeft = tilesLeftToSwap st 104
-        let handList = toList st.hand
-        List.take tilesLeft handList
-        
-    let getNextMove (usedCoords: List<coord>) (st: state) (tiles: Map<uint32, tile>) =
+    let getNextMove (usedCoords: List<coord>) (tiles: Map<uint32, tile>) (st: state) =
         let next (x, y) = function
             | Right -> (x + 1, y)
             | Down -> (x, y + 1)
@@ -63,7 +42,7 @@ module internal MakeWord
                         if isTerminal &&
                            List.length currentMove > 0 &&
                            nextHasStarted &&
-                           areSurroundingTilesEmpty pos st direction nextHasStarted
+                           areSurroundingTilesEmpty pos direction nextHasStarted st
                         then
                             currentMove :: possibleMoves
                         else
@@ -78,12 +57,12 @@ module internal MakeWord
         and checkNextPos pos direction dict hand currentMove possibleMoves hasStarted startPos =
             let nextPos = next pos direction
             
-            if areSurroundingTilesEmpty pos st direction hasStarted then
+            if areSurroundingTilesEmpty pos direction hasStarted st then
                 fold (fun acc id _val ->
                     let nextHand = removeSingle id hand
 
                     let nextPossibleMoves = 
-                        Set.fold (fun accu (char, value) ->
+                        Set.fold (fun acc (char, value) ->
                             let nextMove = currentMove @ [pos, (id, (char, value))]
 
                             match step char dict with
@@ -94,8 +73,8 @@ module internal MakeWord
                                     else
                                         possibleMoves
                                 
-                                move nextPos direction nextDict nextHand nextMove newMoves hasStarted startPos @ accu
-                            | None -> accu
+                                move nextPos direction nextDict nextHand nextMove newMoves hasStarted startPos @ acc
+                            | None -> acc
                         ) [] (Map.find id tiles)
 
                     nextPossibleMoves @ acc
@@ -103,28 +82,27 @@ module internal MakeWord
             else
                 possibleMoves
 
-        let goDown pos =
-            if isGoodStartPos pos st Down then
-                move pos Down st.dict st.hand [] [] true pos
+        let buildWordsInDirection pos dir =
+            if isValidStartPos pos dir st then
+                move pos dir st.dict st.hand [] [] true pos
             else
                 []
-
-        let goRight pos =
-            if isGoodStartPos pos st Right then
-                move pos Right st.dict st.hand [] [] true pos
-            else
-                []
-
-        getLongestWord (List.fold
-                    (fun acc pos ->
-                        let down = goDown pos
-                        let right = goRight pos
-                        acc @ down @ right)
-                    List.Empty usedCoords)
                 
-    let getMove (st: state) (tiles: Map<uint32, tile>) =
+        let possibleWordsFromPos pos =
+           let right = buildWordsInDirection pos Right
+           let down = buildWordsInDirection pos Down
+           right @ down
+        
+        let allPossibleWords = List.fold (fun acc pos -> acc @ possibleWordsFromPos pos) List.Empty usedCoords
+        
+        if allPossibleWords.IsEmpty then
+            []
+        else
+            allPossibleWords |> List.maxBy List.length
+                
+    let getMove (tiles: Map<uint32, tile>) (st: state) =
         if st.lettersPlaced.IsEmpty then
-            getNextMove [st.board.center] st tiles
+            getNextMove [st.center] tiles st
         else
             let listOfUsedCoords = st.lettersPlaced |> Map.toList |> List.map fst
-            getNextMove listOfUsedCoords st tiles
+            getNextMove listOfUsedCoords tiles st

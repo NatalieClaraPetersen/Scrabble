@@ -38,14 +38,14 @@ module Scrabble =
 
     let playGame cstream pieces (st : State.state) =
         let rec aux (st : State.state) =
-            let move = MakeWord.getMove st pieces
+            let move = MakeWord.getMove pieces st
             
             Print.printHand pieces st.hand
             
             if move.IsEmpty then
-                if MakeWord.canSwap st then
-                    debugPrint "No moves found. Swapping..."
-                    send cstream (SMChange (MakeWord.handToList st))
+                if st.tilesLeft > 0 then
+                    debugPrint "No moves found. Swapping...\n"
+                    send cstream (SMChange (MakeWord.tilesForSwappies st))
                 else
                     debugPrint "No moves found. Passing."
                     send cstream SMPass
@@ -59,35 +59,24 @@ module Scrabble =
            // debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
             
             match msg with
-            | RCM (CMChangeSuccess(newTiles)) ->
+            | RCM (CMPlaySuccess(move, _points, newPieces)) ->
+                debugPrint "RCMPlaySuccess**\n"
+                (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
                 let st' =
-                    State.change(MakeWord.handToList st) st newTiles
+                    State.remove move st
+                    |> State.add newPieces
+                    |> State.updateBoard move
+                aux st'
+            | RCM (CMChangeSuccess(newTiles)) ->
+                let st' = State.change (MakeWord.tilesForSwappies st) st newTiles
+                debugPrint "CMChangeSuccess**\n"
                 aux st'
                 
             | RCM (CMGameOver _) ->
                 let handCount = MultiSet.size st.hand |> int
-                (debugPrint $"CMGameOver: **Three CMChangeSuccess in a row** | hand: {handCount}\n")
+                (debugPrint $"CMGameOver** hand: {handCount}\n")
                 
             | RGPE err -> debugPrint $"Gameplay Error:\n%A{err}"; aux st
-            
-            | RCM (CMPlaySuccess(ms, _points, newPieces)) ->
-                debugPrint "RCMPlaySuccess**\n"
-                (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
-                let st' =
-                    State.remove ms st
-                    |> State.add newPieces
-                    |> State.updateBoard ms
-                aux st'
-                
-            | RCM (CMPlayed (_pid, ms, _points)) ->
-                let st' = State.updateBoard ms st
-                aux st'
-
-            | RCM (CMPlayFailed (_pid, _ms)) ->
-                debugPrint "RCMPlayFailed**\n"
-                (* Failed play. Update your state *)
-                let st' = st
-                aux st'
 
             | RCM (CMPassed _) ->
                 aux st
@@ -115,11 +104,13 @@ module Scrabble =
                       timeout = %A{timeout}\n\n"
 
         //let dict = dictf true // Uncomment if using a gaddag for your dictionary
+        
         let dict = dictf false // Uncomment if using a trie for your dictionary
-        let board = Parser.mkBoard boardP
-                  
+        let center = boardP.center
         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty hand
         let initialPlacedLetters = Map.empty
         
-        fun () -> playGame cstream tiles (State.mkState board dict handSet initialPlacedLetters)
+        let initialState = State.mkState center dict handSet initialPlacedLetters 97
+        
+        fun () -> playGame cstream tiles initialState
         
