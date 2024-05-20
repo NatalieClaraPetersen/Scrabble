@@ -5,7 +5,7 @@ module internal MakeWord
     open ScrabbleUtil.Dictionary
     open State
         
-    let isGoodStartPos (x, y) (st: state) dir =
+    let isGoodStartPos ((x, y): coord) (st: state) (dir: direction) =
         let checkTile dx dy = Map.tryFind (x + dx, y + dy) st.lettersPlaced |> Option.isNone
         match dir with
         | Right -> checkTile -1 0
@@ -103,24 +103,24 @@ module internal MakeWord
             else
                 possibleMoves
 
-
         let goDown pos =
-            match isGoodStartPos pos st Down with // false = down, true = right
-            | true -> move pos Down st.dict st.hand [] [] true pos
-            | false -> []
+            if isGoodStartPos pos st Down then
+                move pos Down st.dict st.hand [] [] true pos
+            else
+                []
 
         let goRight pos =
-            match isGoodStartPos pos st Right with
-            | true -> move pos Right st.dict st.hand [] [] true pos
-            | false -> []
-            
-        getLongestWord (List.fold
-            (fun acc pos ->
-                let down = goDown pos
-                let right = goRight pos
-                acc @ down @ right)
-            List.Empty usedCoords)
+            if isGoodStartPos pos st Right then
+                move pos Right st.dict st.hand [] [] true pos
+            else
+                []
 
+        getLongestWord (List.fold
+                    (fun acc pos ->
+                        let down = goDown pos
+                        let right = goRight pos
+                        acc @ down @ right)
+                    List.Empty usedCoords)
                 
     let getMove (st: state) (tiles: Map<uint32, tile>) =
         if st.lettersPlaced.IsEmpty then
